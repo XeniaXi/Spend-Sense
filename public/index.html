@@ -294,6 +294,7 @@ function parse(text,fx){
 
 /* ---------- state + render ---------- */
 let TX=[];
+let _insightTracked=false, _subsTracked=false; // dedup guards for per-analysis events
 const NGN=n=>'₦'+Math.round(n).toLocaleString('en-NG');
 function compact(n){ if(n>=1e6)return'₦'+(n/1e6).toFixed(1)+'m'; if(n>=1e3)return'₦'+(n/1e3).toFixed(0)+'k'; return'₦'+Math.round(n);}
 
@@ -328,6 +329,18 @@ function render(){
     document.getElementById('insight').innerHTML=
       `Your biggest drain was <b>${tc}</b> at <b>${NGN(tv)}</b> — about ${pct}% of everything you spent. `+
       `The single largest hit: <b>${NGN(biggest.amount)}</b> to ${biggest.party}.`;
+    if(!_insightTracked){
+      _insightTracked=true;
+      pendo.track("spending_insight_generated",{
+        top_category:tc,
+        top_category_amount:Math.round(tv),
+        top_category_percentage:pct,
+        largest_transaction_amount:Math.round(biggest.amount),
+        largest_transaction_party:biggest.party,
+        total_outflow:Math.round(outSum),
+        total_categories:cats.length
+      });
+    }
   }
 
   // donut
@@ -369,7 +382,20 @@ function drawDonut(cats,total){
   html+=`<text x="${cx}" y="${cy+13}" text-anchor="middle" fill="#9aa39a" font-family="JetBrains Mono" font-size="7" letter-spacing="1">SPENT</text>`;
   svg.innerHTML=html;
 }
-function recat(i,c){TX[i].category=c;render();}
+function recat(i,c){
+  const prev=TX[i].category;
+  TX[i].category=c;
+  pendo.track("transaction_recategorized",{
+    previous_category:prev,
+    new_category:c,
+    transaction_amount:Math.round(TX[i].amount),
+    transaction_party:TX[i].party,
+    transaction_source:TX[i].source,
+    transaction_direction:TX[i].dir
+  });
+  _insightTracked=false; _subsTracked=false;
+  render();
+}
 
 const SUB_KW=/dstv|gotv|startimes|netflix|spotify|youtube|apple|google one|digitalocean|vercel|\baws\b|github|openai|anthropic|canva|adobe|microsoft|figma|notion|linkedin|prime|subscription/i;
 function findSubs(){
@@ -386,11 +412,32 @@ function renderSubs(){
   const el=document.getElementById('subs'),st=document.getElementById('subTotal');
   const subs=findSubs();
   if(!subs.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 2px">No recurring patterns detected yet.</div>';st.textContent='—';return;}
-  st.textContent='₦'+Math.round(subs.reduce((a,x)=>a+x.total,0)).toLocaleString('en-NG')+' tracked';
+  const subTotal=subs.reduce((a,x)=>a+x.total,0);
+  if(!_subsTracked){
+    _subsTracked=true;
+    const kwMatches=subs.filter(s=>s.why==='subscription').length;
+    pendo.track("subscriptions_detected",{
+      subscription_count:subs.length,
+      total_subscription_amount:Math.round(subTotal),
+      subscription_merchants:subs.map(s=>s.m).join(",").slice(0,200),
+      keyword_matches_count:kwMatches,
+      repeat_matches_count:subs.length-kwMatches
+    });
+  }
+  st.textContent='₦'+Math.round(subTotal).toLocaleString('en-NG')+' tracked';
   el.innerHTML=subs.map(s=>`<div class="sub"><div><span class="m">${s.m}</span><span class="why">${s.why} · ${s.n}×</span></div><span class="amt">${NGN(s.total)}</span></div>`).join('');
 }
-function importFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{document.getElementById('input').value=r.result;analyze();};r.readAsText(f);}
+function importFile(inp){const f=inp.files[0];if(!f)return;const fileName=f.name;const fileType=f.name.split('.').pop();const fileSize=f.size;const r=new FileReader();
+  r.onload=()=>{document.getElementById('input').value=r.result;analyze();
+    const sources=[...new Set(TX.map(t=>t.source))];
+    pendo.track("file_imported",{
+      file_name:fileName,
+      file_type:fileType,
+      file_size_bytes:fileSize,
+      transaction_count:TX.length,
+      sources_detected:sources.join(",")
+    });
+  };r.readAsText(f);}
 
 /* ---------- actions ---------- */
 function analyze(){
@@ -398,13 +445,41 @@ function analyze(){
   const txt=document.getElementById('input').value.trim();
   if(!txt){loadSample();return;}
   TX=parse(txt,fx);
+  _insightTracked=false; _subsTracked=false;
+  const inTotal=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
+  const outTotal=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
+  const sources=[...new Set(TX.map(t=>t.source))];
+  const categories=[...new Set(TX.map(t=>t.category))];
+  pendo.track("alerts_analyzed",{
+    transaction_count:TX.length,
+    money_in_total:Math.round(inTotal),
+    money_out_total:Math.round(outTotal),
+    net_balance:Math.round(inTotal-outTotal),
+    fx_rate:fx,
+    sources_detected:sources.join(","),
+    categories_detected:categories.join(","),
+    has_fx_transactions:TX.some(t=>t.fx),
+    input_length:txt.length
+  });
   document.getElementById('sampleNote').classList.add('hide');
   render();
 }
 function clearAll(){document.getElementById('input').value='';TX=[];
   document.getElementById('sampleNote').classList.add('hide');render();}
 function exportJSON(){
-  const blob=new Blob([JSON.stringify(TX,null,2)],{type:'application/json'});
+  const json=JSON.stringify(TX,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const inTotal=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
+  const outTotal=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
+  const categories=[...new Set(TX.map(t=>t.category))];
+  pendo.track("data_exported_json",{
+    transaction_count:TX.length,
+    money_in_total:Math.round(inTotal),
+    money_out_total:Math.round(outTotal),
+    categories_count:categories.length,
+    has_fx_transactions:TX.some(t=>t.fx),
+    file_size_bytes:blob.size
+  });
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='spend-sense-export.json';a.click();
 }
@@ -440,6 +515,15 @@ pendo.initialize({ visitor: { id: '' } });
   if(sid){
     fetch('/api/session/'+encodeURIComponent(sid)).then(r=>r.ok?r.json():Promise.reject())
       .then(d=>{ if(d&&d.tx&&d.tx.length){ TX=d.tx;
+          _insightTracked=false; _subsTracked=false;
+          const inTotal=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
+          const outTotal=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
+          pendo.track("mcp_session_hydrated",{
+            session_id:sid,
+            transaction_count:TX.length,
+            money_in_total:Math.round(inTotal),
+            money_out_total:Math.round(outTotal)
+          });
           const n=document.getElementById('sampleNote');
           n.innerHTML='✦ Loaded from your AI assistant via MCP — '+TX.length+' transactions.';
           n.classList.remove('hide'); render();
