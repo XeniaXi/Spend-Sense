@@ -4,7 +4,7 @@
 
 export const CATS = ["Housing","Education","Food & Dining","Transport & Fuel","Telecom & Data",
   "Utilities & Bills","Marketing & Ads","Infrastructure / SaaS","Crypto & Trading",
-  "Shopping","Health","Transfers & Cash","Fees & Charges","Income","Uncategorized"];
+  "Shopping","Health","Betting & Gaming","Transfers & Cash","Fees & Charges","Income","Uncategorized"];
 
 const RULES = [
   ["Housing",/rent|landlord|apartment|accommodation|lease/i],
@@ -16,6 +16,7 @@ const RULES = [
   ["Marketing & Ads",/facebook\s?ads|facebookads|google\s?ads|\bmeta\b|\bads\b|marketing|boost|campaign/i],
   ["Infrastructure / SaaS",/digitalocean|vercel|\baws\b|amazon web|cloud|hosting|github|openai|anthropic|server|domain|namecheap|netlify/i],
   ["Crypto & Trading",/bybit|binance|usdt|crypto|\bp2p\b|luno|quidax|busd|stablecoin/i],
+  ["Betting & Gaming",/bet9ja|sportybet|1xbet|betking|betway|nairabet|bangbet|msport|parimatch|\bbet\b|\bbetting\b|casino|jackpot|lottery/i],
   ["Shopping",/jumia|konga|\bstore\b|\bmall\b|fashion|temu|amazon|boutique|aliexpress/i],
   ["Health",/hospital|pharmacy|chemist|clinic|\bdrug|medical|health|optical/i],
   ["Fees & Charges",/\bfee\b|charge|levy|stamp|\bvat\b|commission|sms charge|maintenance/i],
@@ -27,7 +28,14 @@ const SUB_KEYWORDS = /dstv|gotv|startimes|netflix|spotify|youtube premium|apple|
 
 export function categorize(t){ for (const [c,re] of RULES) if (re.test(t)) return c; return "Uncategorized"; }
 
-function clean(s){ return s.replace(/\s+/g,' ').replace(/[-–]\s*$/,'').trim().slice(0,42); }
+// Redact account numbers and sensitive numeric strings before storing
+function redact(s){
+  return s
+    .replace(/\bAccount\s*(?:Number|No\.?)?\s*:?\s*\d{6,}/gi, 'Account •••')
+    .replace(/\b\d{10,}\b/g, '•••')  // any standalone 10+ digit number
+    .replace(/\b\d{4}[\s\-]\d{4}[\s\-]\d{4}[\s\-]\d{4}\b/g, '•••• •••• •••• ••••'); // card numbers
+}
+function clean(s){ return redact(s.replace(/\s+/g,' ').replace(/[-–]\s*$/,'').trim().slice(0,60)).slice(0,42); }
 
 function parseAmount(line, fx){
   let m = line.match(/(?:₦|NGN|N(?=\s?[\d]))\s?([\d,]+(?:\.\d{1,2})?)/i);
@@ -79,6 +87,21 @@ export function summarize(tx){
   const topCategories = Object.entries(byCat).sort((a,b)=>b[1]-a[1])
     .map(([category,amount])=>({category, amount, pct: outSum?Math.round(amount/outSum*100):0}));
   return { count: tx.length, moneyIn: inSum, moneyOut: outSum, net: inSum-outSum, topCategories };
+}
+
+export function findUnusual(tx){
+  const out = tx.filter(t => t.dir === 'out');
+  if (out.length < 3) return [];
+  const sorted = [...out].sort((a,b) => a.amount - b.amount);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2
+    ? sorted[mid].amount
+    : (sorted[mid-1].amount + sorted[mid].amount) / 2;
+  const threshold = Math.max(median * 3, 5000); // 3× median or ₦5k minimum
+  return out
+    .filter(t => t.amount >= threshold)
+    .sort((a,b) => b.amount - a.amount)
+    .map(t => ({ ...t, reason: `₦${Math.round(t.amount).toLocaleString()} is ${Math.round(t.amount/median)}× your typical spend` }));
 }
 
 export function findSubscriptions(tx){

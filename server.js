@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { parse, summarize, findSubscriptions } from "./parser.js";
+import { parse, summarize, findSubscriptions, findUnusual } from "./parser.js";
 import { google } from "googleapis";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,6 +81,21 @@ function buildMcpServer(){
       `Found ${subs.length} recurring/subscription items totalling ₦${total.toLocaleString()}:\n` +
       subs.map(x=>`• ${x.merchant} — ₦${x.total.toLocaleString()} (${x.occurrences}x, ${x.reason})`).join("\n") }],
       structuredContent: { subscriptions: subs, total } };
+  });
+
+  server.registerTool("find_unusual", {
+    title: "Find unusual transactions",
+    description: "Flag transactions that are significantly larger than the user's typical spend — potential errors, fraud, or forgotten charges.",
+    inputSchema: { sessionId: z.string() }
+  }, async ({ sessionId }) => {
+    const s = SESSIONS.get(sessionId);
+    if (!s) return { content: [{ type: "text", text: "Session not found or expired." }] };
+    const unusual = findUnusual(s.tx);
+    if (!unusual.length) return { content: [{ type: "text", text: "No unusual transactions detected — all spend looks consistent with your normal patterns." }] };
+    return { content: [{ type: "text", text:
+      `Found ${unusual.length} unusual transaction(s):\n` +
+      unusual.map(t => `• ${t.party} — ₦${Math.round(t.amount).toLocaleString()} (${t.reason})`).join("\n") }],
+      structuredContent: { unusual } };
   });
 
   server.registerTool("list_supported_banks", {

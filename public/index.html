@@ -186,6 +186,18 @@
   .tweak-row label{flex:1;color:var(--muted)}
   .tweak-row input[type=range]{width:90px;accent-color:var(--green)}
   .tweak-row .tw-val{font-family:'JetBrains Mono';font-size:11px;color:var(--cream);width:32px;text-align:right}
+  /* unusual transactions */
+  .unusual-item{display:flex;justify-content:space-between;align-items:flex-start;
+    padding:10px 0;border-bottom:1px solid var(--line);gap:12px}
+  .unusual-item:last-child{border-bottom:0}
+  .unusual-why{font-family:'JetBrains Mono';font-size:10px;color:var(--gold);margin-top:2px}
+  .unusual-amt{font-family:'JetBrains Mono';font-size:13px;color:var(--red);white-space:nowrap;font-weight:600}
+  /* ask your money */
+  .prompt-chip{font-size:12px;padding:9px 12px;background:var(--bg);border:1px solid rgba(111,177,255,.2);
+    border-radius:9px;cursor:pointer;color:var(--cream);transition:.15s;line-height:1.4}
+  .prompt-chip:hover{border-color:var(--blue);color:var(--blue)}
+  .prompt-chip.copied{border-color:var(--green);color:var(--green)}
+  @media(max-width:560px){#promptGrid{grid-template-columns:1fr}}
   /* date filter + share bar */
   .ctrl-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
     margin-top:14px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
@@ -334,6 +346,29 @@
       </div>
 
       <div class="panel" style="margin-top:18px">
+        <div class="sec-title"><h3>Unusual transactions</h3><span id="unusualMeta">—</span></div>
+        <div id="unusualList"></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px;background:linear-gradient(135deg,rgba(111,177,255,.07),rgba(56,224,138,.05));border-color:rgba(111,177,255,.25)">
+        <div class="sec-title"><h3>Ask your money</h3><span style="color:var(--blue)">via MCP</span></div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Connect Spend Sense to Claude, Cursor, Codex, or Windsurf and ask questions in plain English.</p>
+        <div id="promptGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+          <div class="prompt-chip" onclick="copyPrompt(this)">"What did I spend most on this week?"</div>
+          <div class="prompt-chip" onclick="copyPrompt(this)">"Find subscriptions I forgot about."</div>
+          <div class="prompt-chip" onclick="copyPrompt(this)">"Did my food spending increase?"</div>
+          <div class="prompt-chip" onclick="copyPrompt(this)">"Which transactions look unusual?"</div>
+          <div class="prompt-chip" onclick="copyPrompt(this)">"Summarize my cash flow this month."</div>
+          <div class="prompt-chip" onclick="copyPrompt(this)">"How much did I spend on transfers?"</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-family:'JetBrains Mono';font-size:10.5px;color:var(--muted)">MCP endpoint:</span>
+          <code style="font-family:'JetBrains Mono';font-size:11px;background:var(--bg);padding:5px 10px;border-radius:6px;border:1px solid var(--line);color:var(--blue)">https://spendsense.mpaukwu.tech/mcp</code>
+          <button class="ctrl-btn" onclick="copyMCP()" id="mcpCopyBtn" style="border-color:rgba(111,177,255,.4);color:var(--blue)">⎘ Copy</button>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:18px">
         <div class="sec-title"><h3>Spending timeline</h3><span>by week</span></div>
         <div id="timeline"><div class="tl-empty">No data yet.</div></div>
       </div>
@@ -382,11 +417,12 @@
 /* ---------- categories & rules ---------- */
 const CATS = ["Housing","Education","Food & Dining","Transport & Fuel","Telecom & Data",
   "Utilities & Bills","Marketing & Ads","Infrastructure / SaaS","Crypto & Trading",
-  "Shopping","Health","Transfers & Cash","Fees & Charges","Income","Uncategorized"];
+  "Shopping","Health","Betting & Gaming","Transfers & Cash","Fees & Charges","Income","Uncategorized"];
 const COLORS={"Housing":"#e8b24a","Education":"#6fb1ff","Food & Dining":"#38e08a",
   "Transport & Fuel":"#ff9f5a","Telecom & Data":"#b08cff","Utilities & Bills":"#5ad0c8",
   "Marketing & Ads":"#ff6f6f","Infrastructure / SaaS":"#7ee0ff","Crypto & Trading":"#f0d35a",
-  "Shopping":"#ff8cc6","Health":"#7affc0","Transfers & Cash":"#9aa39a","Fees & Charges":"#c98a5a",
+  "Shopping":"#ff8cc6","Health":"#7affc0","Betting & Gaming":"#ff4d4d",
+  "Transfers & Cash":"#9aa39a","Fees & Charges":"#c98a5a",
   "Income":"#38e08a","Uncategorized":"#6b756b"};
 const RULES=[
   ["Housing",/rent|landlord|apartment|accommodation|lease/i],
@@ -398,6 +434,7 @@ const RULES=[
   ["Marketing & Ads",/facebook\s?ads|facebookads|google\s?ads|\bmeta\b|\bads\b|marketing|boost|campaign/i],
   ["Infrastructure / SaaS",/digitalocean|vercel|\baws\b|amazon web|cloud|hosting|github|openai|anthropic|server|domain|namecheap|netlify/i],
   ["Crypto & Trading",/bybit|binance|usdt|crypto|\bp2p\b|luno|quidax|busd|stablecoin/i],
+  ["Betting & Gaming",/bet9ja|sportybet|1xbet|betking|betway|nairabet|bangbet|msport|parimatch|\bbet\b|\bbetting\b|casino|jackpot|lottery/i],
   ["Shopping",/jumia|konga|\bstore\b|\bmall\b|fashion|temu|amazon|boutique|aliexpress/i],
   ["Health",/hospital|pharmacy|chemist|clinic|\bdrug|medical|health|optical/i],
   ["Fees & Charges",/\bfee\b|charge|levy|stamp|\bvat\b|commission|sms charge|maintenance/i],
@@ -421,7 +458,8 @@ function parseParty(line){
   m=line.match(/\b(MTN|Glo|Airtel|9mobile|DStv|GOtv|StarTimes|NNPC|Ardova)\b/i); if(m) return m[1];
   return "Unknown";
 }
-function clean(s){return s.replace(/\s+/g,' ').replace(/[-–]\s*$/,'').trim().slice(0,42);}
+function redact(s){return s.replace(/\bAccount\s*(?:Number|No\.?)?\s*:?\s*\d{6,}/gi,'Account •••').replace(/\b\d{10,}\b/g,'•••');}
+function clean(s){return redact(s.replace(/\s+/g,' ').replace(/[-–]\s*$/,'').trim().slice(0,60)).slice(0,42);}
 function direction(line){
   if(/sent you|just sent you|credited|\bCR\b|received|payment from|\bfrom\b|deposit|refund/i.test(line)
      && !/you sent|you just sent/i.test(line)) return "in";
@@ -490,7 +528,9 @@ function render(){
     document.getElementById('savingsTotal').innerHTML='';
     document.getElementById('scoreNum').textContent='—';document.getElementById('scoreLabel').textContent='—';
     document.getElementById('scoreFactors').innerHTML='';document.getElementById('gauge').innerHTML='';
-    document.getElementById('scoreGrade').textContent='—';return; }
+    document.getElementById('scoreGrade').textContent='—';
+    document.getElementById('unusualList').innerHTML='';document.getElementById('unusualMeta').textContent='—';
+    return; }
 
   const inSum=VW.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
   const outSum=VW.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
@@ -540,6 +580,7 @@ function render(){
   renderBudget();
   renderSavings();
   renderScore();
+  renderUnusual();
   pendo.pageLoad();
 }
 function renderTable(){
@@ -698,6 +739,46 @@ function loadSample(){
   if (!vid) { vid = 'anon-' + crypto.randomUUID(); localStorage.setItem('ss_vid', vid); }
   pendo.initialize({ visitor: { id: vid } });
 })();
+
+/* ---- Unusual Transactions ---- */
+function findUnusualClient(){
+  const out=VW.filter(t=>t.dir==='out');
+  if(out.length<3) return [];
+  const sorted=[...out].sort((a,b)=>a.amount-b.amount);
+  const mid=Math.floor(sorted.length/2);
+  const median=sorted.length%2?sorted[mid].amount:(sorted[mid-1].amount+sorted[mid].amount)/2;
+  const threshold=Math.max(median*3,5000);
+  return out.filter(t=>t.amount>=threshold).sort((a,b)=>b.amount-a.amount)
+    .map(t=>({...t,reason:`${Math.round(t.amount/median)}× your typical spend`}));
+}
+function renderUnusual(){
+  const el=document.getElementById('unusualList');
+  const meta=document.getElementById('unusualMeta');
+  const items=findUnusualClient();
+  if(!items.length){
+    el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No unusual activity detected.</div>';
+    meta.textContent='all clear'; meta.style.color='var(--green)'; return;
+  }
+  meta.textContent=`${items.length} flagged`; meta.style.color='var(--gold)';
+  el.innerHTML=items.map(t=>
+    `<div class="unusual-item">
+      <div><div style="font-weight:600">${t.party}</div>
+        <div class="unusual-why">⚠ ${t.reason} · ${t.source}</div></div>
+      <span class="unusual-amt">−${NGN(t.amount)}</span>
+    </div>`).join('');
+}
+
+/* ---- Ask your money helpers ---- */
+function copyPrompt(el){
+  const txt=el.textContent.replace(/^"|"$/g,'');
+  navigator.clipboard.writeText(txt).catch(()=>{});
+  el.classList.add('copied');setTimeout(()=>el.classList.remove('copied'),1500);
+}
+function copyMCP(){
+  navigator.clipboard.writeText('https://spendsense.mpaukwu.tech/mcp').catch(()=>{});
+  const btn=document.getElementById('mcpCopyBtn');
+  btn.textContent='✓ Copied';setTimeout(()=>btn.textContent='⎘ Copy',2000);
+}
 
 /* ---- Spend Score ---- */
 let SW=JSON.parse(localStorage.getItem('ss_score_weights')||'{"base":700,"sav":1,"bud":1,"fee":1,"txf":1,"sub":1}');
