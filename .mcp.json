@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "spend-sense": {
+      "type": "http",
+      "url": "https://spendsense.mpaukwu.tech/mcp"
+    }
+  }
+}
