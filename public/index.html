@@ -12,7 +12,15 @@
      3. Paste it directly below this comment, before </head>
      4. Redeploy, click around, then screenshot your Novus dashboard
      ============================================================ -->
-<!-- PASTE NOVUS SNIPPET HERE -->
+<script>
+(function(apiKey){
+    (function(p,e,n,d,o){var v,w,x,y,z;o=p[d]=p[d]||{};o._q=o._q||[];
+    v=['initialize','identify','updateOptions','pageLoad','track', 'trackAgent'];for(w=0,x=v.length;w<x;++w)(function(m){
+    o[m]=o[m]||function(){o._q[m===v[0]?'unshift':'push']([m].concat([].slice.call(arguments,0)));};})(v[w]);
+    y=e.createElement(n);y.async=!0;y.src='https://cdn.pendo.io/agent/static/'+apiKey+'/pendo.js';
+    z=e.getElementsByTagName(n)[0];z.parentNode.insertBefore(y,z);})(window,document,'script','pendo');
+})('2f722fa3-9dc7-4aa8-8b2e-397a60af8aff');
+</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -423,6 +431,9 @@ function loadSample(){
   document.getElementById('sampleNote').classList.remove('hide');
   render();
 }
+// Initialize Pendo with anonymous visitor (resolves from cookies if available)
+pendo.initialize({ visitor: { id: '' } });
+
 // Hydrate from an MCP/ingest session if ?s= is present; else show sample so the page is alive.
 (function boot(){
   const sid=new URLSearchParams(location.search).get('s');
