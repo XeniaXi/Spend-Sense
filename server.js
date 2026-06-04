@@ -19,6 +19,19 @@ import { google } from "googleapis";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
+
+// Fire a server-side Pendo track event (non-fatal; skipped if PENDO_INTEGRATION_KEY is unset).
+async function pendoTrack(event, visitorId, properties = {}) {
+  const key = process.env.PENDO_INTEGRATION_KEY;
+  if (!key) return;
+  try {
+    await fetch("https://app.pendo.io/data/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-pendo-integration-key": key },
+      body: JSON.stringify({ type: "track", event, visitorId, timestamp: Date.now(), properties })
+    });
+  } catch (_) { /* non-fatal */ }
+}
 // Set PUBLIC_BASE to your deployed URL (e.g. https://spend.mpaukwu.com) so the
 // dashboard links the assistant returns are clickable.
 const PUBLIC_BASE = process.env.PUBLIC_BASE || `http://localhost:${PORT}`;
@@ -50,6 +63,7 @@ function buildMcpServer(){
     if (!tx.length) return { content: [{ type: "text", text: "No transactions could be parsed from that text." }] };
     const id = saveSession(tx);
     const sum = summarize(tx);
+    pendoTrack("mcp_alerts_loaded", "mcp-agent", { count: sum.count, moneyIn: sum.moneyIn, moneyOut: sum.moneyOut });
     const out = { sessionId: id, dashboardUrl: `${PUBLIC_BASE}/?s=${id}`,
       count: sum.count, moneyIn: sum.moneyIn, moneyOut: sum.moneyOut, net: sum.net };
     return { content: [{ type: "text", text:
@@ -65,6 +79,7 @@ function buildMcpServer(){
     const s = SESSIONS.get(sessionId);
     if (!s) return { content: [{ type: "text", text: "Session not found or expired." }] };
     const sum = summarize(s.tx);
+    pendoTrack("mcp_summary_queried", "mcp-agent", { sessionId });
     return { content: [{ type: "text", text: JSON.stringify(sum, null, 2) }], structuredContent: sum };
   });
 
@@ -77,6 +92,7 @@ function buildMcpServer(){
     if (!s) return { content: [{ type: "text", text: "Session not found or expired." }] };
     const subs = findSubscriptions(s.tx);
     const total = subs.reduce((a,x)=>a+x.total,0);
+    pendoTrack("mcp_subscriptions_queried", "mcp-agent", { sessionId, count: subs.length, total });
     return { content: [{ type: "text", text:
       `Found ${subs.length} recurring/subscription items totalling ₦${total.toLocaleString()}:\n` +
       subs.map(x=>`• ${x.merchant} — ₦${x.total.toLocaleString()} (${x.occurrences}x, ${x.reason})`).join("\n") }],
@@ -132,7 +148,9 @@ app.post("/api/ingest", (req, res) => {
   const tx = parse(text, fxRate || 1600);
   if (!tx.length) return res.status(422).json({ error: "no transactions parsed" });
   const id = saveSession(tx);
-  res.json({ sessionId: id, url: `${PUBLIC_BASE}/?s=${id}`, ...summarize(tx) });
+  const sum = summarize(tx);
+  pendoTrack("api_alerts_ingested", "api-client", { count: sum.count, moneyIn: sum.moneyIn, moneyOut: sum.moneyOut });
+  res.json({ sessionId: id, url: `${PUBLIC_BASE}/?s=${id}`, ...sum });
 });
 
 // Dashboard reads this to hydrate from an MCP/ingest session

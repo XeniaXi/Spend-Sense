@@ -1037,6 +1037,7 @@ function importGmail(){
             ?'📧 Imported '+count+' transactions from your Gmail bank alerts.'
             :'✦ Loaded from your AI assistant via MCP — '+TX.length+' transactions.';
           if(source==='gmail') pendo.track('gmail_import_completed', { transactionCount: TX.length });
+          else pendo.track('mcp_session_hydrated', { transactionCount: TX.length });
           n.innerHTML=label; n.classList.remove('hide'); render();
         } else loadSample(); })
       .catch(loadSample);
