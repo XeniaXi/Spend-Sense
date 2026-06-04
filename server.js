@@ -164,23 +164,32 @@ app.get("/auth/gmail/callback", async (req, res) => {
       "from:gtbank OR from:accessbank OR from:firstbank OR " +
       'subject:"transfer successful" OR subject:"debit alert" OR subject:"credit alert") newer_than:90d';
 
-    // Fetch message list with snippets — minimal format is fast and snippets contain enough
-    // data for our parser (amount, direction, party name are all in the snippet text)
     const listRes = await gmail.users.messages.list({ userId: "me", q: BANK_QUERY, maxResults: 100 });
     const messages = listRes.data.messages || [];
     if (!messages.length) return res.redirect("/?error=no_alerts");
 
-    // Fetch snippets in parallel — minimal format returns snippet without downloading full body
-    const snippets = await Promise.all(
+    // Fetch snippet + internalDate per message — minimal is fast, internalDate gives us real email timestamps
+    const msgs = await Promise.all(
       messages.slice(0, 100).map(m =>
         gmail.users.messages.get({ userId: "me", id: m.id, format: "minimal" })
-          .then(r => r.data.snippet || "")
-          .catch(() => "")
+          .then(r => ({
+            snippet: r.data.snippet || "",
+            date: r.data.internalDate
+              ? new Date(parseInt(r.data.internalDate)).toISOString().slice(0, 10)
+              : null
+          }))
+          .catch(() => ({ snippet: "", date: null }))
       )
     );
 
-    const combined = snippets.filter(Boolean).join("\n\n");
-    const tx = parse(combined, parseFloat(process.env.FX_RATE) || 1600);
+    // Parse each message individually so we can attach the real email date
+    const fxRate = parseFloat(process.env.FX_RATE) || 1600;
+    const tx = msgs.flatMap(({ snippet, date }) => {
+      if (!snippet) return [];
+      const parsed = parse(snippet, fxRate);
+      if (date) parsed.forEach(t => { t.date = t.date || date; });
+      return parsed;
+    });
     if (!tx.length) return res.redirect("/?error=no_transactions");
 
     const id = saveSession(tx);

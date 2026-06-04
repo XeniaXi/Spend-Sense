@@ -140,6 +140,30 @@
     padding:2px 7px;border-radius:20px;margin-left:8px}
   .sub .amt{font-family:'JetBrains Mono';color:var(--gold);font-size:13px;white-space:nowrap}
   #subTotal{font-family:'JetBrains Mono';font-size:10px;color:var(--gold);letter-spacing:.08em}
+  /* timeline */
+  .tl-empty{color:var(--muted);font-size:12.5px;padding:14px 0}
+  /* budget tracker */
+  .budget-row{padding:10px 0;border-bottom:1px solid var(--line)}
+  .budget-row:last-child{border-bottom:0}
+  .budget-top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:5px}
+  .budget-cat{font-weight:600}
+  .budget-set{font-family:'JetBrains Mono';font-size:10.5px;color:var(--muted);cursor:pointer;
+    border:1px dashed var(--line);border-radius:6px;padding:2px 8px;transition:.15s}
+  .budget-set:hover{color:var(--green);border-color:var(--green)}
+  .budget-limit{font-family:'JetBrains Mono';font-size:11px;color:var(--muted);cursor:pointer}
+  .budget-limit:hover{color:var(--cream)}
+  .budget-sep{font-family:'JetBrains Mono';font-size:11px;color:var(--line);margin:0 4px}
+  /* savings calculator */
+  .sav-row{padding:11px 0;border-bottom:1px solid var(--line)}
+  .sav-row:last-child{border-bottom:0}
+  .sav-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+  .sav-amt{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);transition:.2s}
+  .sav-slider{display:flex;align-items:center;gap:10px}
+  .sav-slider input[type=range]{flex:1;accent-color:var(--green);cursor:pointer}
+  .sav-pct{font-family:'JetBrains Mono';font-size:11px;color:var(--green);width:32px;text-align:right}
+  .sav-total{margin-top:16px;padding:13px 15px;background:rgba(56,224,138,.1);
+    border:1px solid rgba(56,224,138,.3);border-radius:10px;font-size:14px;line-height:1.5}
+  .sav-total b{color:var(--green);font-style:normal}
   .tbl-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
     gap:10px;margin-top:14px}
   .pg-info{font-family:'JetBrains Mono';font-size:11px;color:var(--muted)}
@@ -222,6 +246,23 @@
       <div class="panel" style="margin-top:18px">
         <div class="sec-title"><h3>Recurring &amp; subscriptions</h3><span id="subTotal">—</span></div>
         <div id="subs" class="subs"></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px">
+        <div class="sec-title"><h3>Spending timeline</h3><span>by week</span></div>
+        <div id="timeline"><div class="tl-empty">No data yet.</div></div>
+      </div>
+
+      <div class="cols" style="margin-top:18px">
+        <div class="panel">
+          <div class="sec-title"><h3>Budget tracker</h3><span>click amount to edit</span></div>
+          <div id="budgetRows"></div>
+        </div>
+        <div class="panel">
+          <div class="sec-title"><h3>Savings calculator</h3><span>drag to cut back</span></div>
+          <div id="savingsRows"></div>
+          <div id="savingsTotal"></div>
+        </div>
       </div>
 
       <div class="panel" style="margin-top:18px">
@@ -309,16 +350,24 @@ function detectSource(line){
   return"Other";
 }
 function splitBlocks(text){
-  // split on blank lines; if none, split per line
   let blocks=text.split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
   if(blocks.length<=1) blocks=text.split(/\n/).map(b=>b.trim()).filter(Boolean);
   return blocks;
+}
+const MO={'jan':'01','feb':'02','mar':'03','apr':'04','may':'05','jun':'06','jul':'07','aug':'08','sep':'09','oct':'10','nov':'11','dec':'12'};
+function extractDate(text){
+  let m=text.match(/\b(\d{4}-\d{2}-\d{2})\b/); if(m) return m[1];
+  m=text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
+  if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+  m=text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/i);
+  if(m) return `${m[3]}-${MO[m[1].toLowerCase().slice(0,3)]}-${String(m[2]).padStart(2,'0')}`;
+  return null;
 }
 function parse(text,fx){
   return splitBlocks(text).map(b=>{
     const amt=parseAmount(b,fx); if(!amt) return null;
     return {amount:amt, dir:direction(b), party:parseParty(b), category:categorize(b),
-      source:detectSource(b), fx:/USD|\$/i.test(b)&&!/₦|NGN/i.test(b)};
+      source:detectSource(b), fx:/USD|\$/i.test(b)&&!/₦|NGN/i.test(b), date:extractDate(b)};
   }).filter(Boolean);
 }
 
@@ -334,7 +383,10 @@ function render(){
     document.getElementById('insight').textContent='—';
     document.getElementById('legend').innerHTML='';document.getElementById('bars').innerHTML='';
     document.getElementById('donut').innerHTML='';
-    document.getElementById('subs').innerHTML='';document.getElementById('subTotal').textContent='—';return; }
+    document.getElementById('subs').innerHTML='';document.getElementById('subTotal').textContent='—';
+    document.getElementById('timeline').innerHTML='<div class="tl-empty">No data yet.</div>';
+    document.getElementById('budgetRows').innerHTML='';document.getElementById('savingsRows').innerHTML='';
+    document.getElementById('savingsTotal').innerHTML='';return; }
 
   const inSum=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
   const outSum=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
@@ -379,6 +431,9 @@ function render(){
   // table — paginated
   renderTable();
   renderSubs();
+  renderTimeline();
+  renderBudget();
+  renderSavings();
 }
 function renderTable(){
   const rows=document.getElementById('rows');
@@ -501,6 +556,103 @@ function loadSample(){
 }
 // Initialize Pendo with anonymous visitor (resolves from cookies if available)
 pendo.initialize({ visitor: { id: '' } });
+
+/* ---- Timeline ---- */
+function renderTimeline(){
+  const el=document.getElementById('timeline');
+  const dated=TX.filter(t=>t.dir==='out'&&t.date);
+  if(dated.length<2){
+    el.innerHTML='<div class="tl-empty">Import from Gmail to see your spending timeline — email dates power this chart.</div>';return;
+  }
+  const weeks={};
+  dated.forEach(t=>{
+    const d=new Date(t.date),day=d.getUTCDay(),diff=(day===0?-6:1)-day;
+    const mon=new Date(d);mon.setUTCDate(d.getUTCDate()+diff);
+    const k=mon.toISOString().slice(0,10);
+    weeks[k]=(weeks[k]||0)+t.amount;
+  });
+  const sorted=Object.entries(weeks).sort((a,b)=>a[0]<b[0]?-1:1).slice(-10);
+  const max=Math.max(...sorted.map(([,v])=>v))||1;
+  const W=500,H=110,pad=28,bw=Math.floor((W-sorted.length*6)/sorted.length);
+  let svg=`<svg width="100%" viewBox="0 0 ${W} ${H+pad}" style="overflow:visible">`;
+  sorted.forEach(([week,amount],i)=>{
+    const x=i*(W/sorted.length),bh=Math.max(4,amount/max*H),y=H-bh;
+    const lbl=week.slice(5).replace('-','/');
+    svg+=`<rect x="${x+3}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="var(--green)" opacity=".8"/>`;
+    svg+=`<text x="${x+3+bw/2}" y="${H+17}" text-anchor="middle" font-family="JetBrains Mono" font-size="8.5" fill="#9aa39a">${lbl}</text>`;
+    if(bh>18) svg+=`<text x="${x+3+bw/2}" y="${y-5}" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#f4efe3">${compact(amount)}</text>`;
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Budget tracker ---- */
+let BUDGETS=JSON.parse(localStorage.getItem('ss_budgets')||'{}');
+function saveBudgets(){localStorage.setItem('ss_budgets',JSON.stringify(BUDGETS));}
+function renderBudget(){
+  const el=document.getElementById('budgetRows');
+  const byCat={};
+  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  if(!cats.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:6px 0">No spending data yet.</div>';return;}
+  el.innerHTML=cats.map(([cat,spent])=>{
+    const budget=BUDGETS[cat]||0;
+    const pct=budget?Math.round(spent/budget*100):0;
+    const over=budget&&spent>budget;
+    const col=over?'var(--red)':pct>80?'var(--gold)':'var(--green)';
+    const spentFmt=`<span style="color:${budget?col:'var(--cream)'}">${NGN(spent)}</span>`;
+    const budgetFmt=budget
+      ?`<span class="budget-sep">/</span><span class="budget-limit" onclick="editBudget('${cat.replace(/'/g,"\\'")}');">${NGN(budget)}</span>`
+      :`<span class="budget-set" onclick="editBudget('${cat.replace(/'/g,"\\'")}');">+ set budget</span>`;
+    return `<div class="budget-row">
+      <div class="budget-top"><span class="budget-cat">${cat}</span>
+        <span style="display:flex;align-items:center">${spentFmt}${budgetFmt}</span></div>
+      ${budget?`<div class="track"><div class="fill" style="width:${Math.min(pct,100)}%;background:${col}"></div></div>`:''}
+    </div>`;
+  }).join('');
+}
+function editBudget(cat){
+  const cur=BUDGETS[cat]||'';
+  const val=prompt(`Monthly budget for "${cat}" (₦):\nLeave blank to remove.`,cur);
+  if(val===null) return;
+  const n=parseFloat(val.replace(/,/g,''));
+  if(n>0) BUDGETS[cat]=n; else delete BUDGETS[cat];
+  saveBudgets(); renderBudget();
+}
+
+/* ---- Savings calculator ---- */
+function renderSavings(){
+  const el=document.getElementById('savingsRows');
+  const byCat={};
+  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  const top=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  if(!top.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:6px 0">No spending data yet.</div>';return;}
+  el.innerHTML=top.map(([cat,amt],i)=>
+    `<div class="sav-row">
+      <div class="sav-top"><span>${cat}</span><span class="sav-amt" id="sa${i}">${NGN(amt)}</span></div>
+      <div class="sav-slider">
+        <input type="range" min="0" max="50" value="0" step="5" id="ss${i}"
+          data-amount="${amt}" oninput="updateSavings()">
+        <span class="sav-pct" id="sp${i}">0%</span>
+      </div>
+    </div>`
+  ).join('');
+  updateSavings();
+}
+function updateSavings(){
+  let total=0;
+  document.querySelectorAll('[id^="ss"]').forEach((s,i)=>{
+    const pct=+s.value,saving=+s.dataset.amount*pct/100;
+    total+=saving;
+    document.getElementById(`sp${i}`).textContent=`−${pct}%`;
+    document.getElementById(`sa${i}`).textContent=saving>0?`saves ${NGN(saving)}`:NGN(+s.dataset.amount);
+    document.getElementById(`sa${i}`).style.color=saving>0?'var(--green)':'var(--muted)';
+  });
+  const tel=document.getElementById('savingsTotal');
+  tel.innerHTML=total>0
+    ?`<div class="sav-total">Cut back as planned and you'd save <b>${NGN(total)}</b> this period. That's <b>${NGN(total*12)}</b> a year.</div>`
+    :'';
+}
 
 function importGmail(){
   const note=document.getElementById('sampleNote');
