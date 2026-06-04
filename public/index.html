@@ -140,6 +140,18 @@
     padding:2px 7px;border-radius:20px;margin-left:8px}
   .sub .amt{font-family:'JetBrains Mono';color:var(--gold);font-size:13px;white-space:nowrap}
   #subTotal{font-family:'JetBrains Mono';font-size:10px;color:var(--gold);letter-spacing:.08em}
+  .tbl-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+    gap:10px;margin-top:14px}
+  .pg-info{font-family:'JetBrains Mono';font-size:11px;color:var(--muted)}
+  .pg-btns{display:flex;align-items:center;gap:6px}
+  .pg-btn{font-family:'JetBrains Mono';font-size:12px;padding:5px 11px;border-radius:8px;
+    cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--cream);transition:.15s}
+  .pg-btn:hover:not(:disabled){border-color:var(--green);color:var(--green)}
+  .pg-btn:disabled{opacity:.3;cursor:default}
+  .pg-btn.active{background:var(--green);color:#06210f;border-color:var(--green)}
+  .pg-size{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+  .pg-size select{background:var(--bg);color:var(--cream);border:1px solid var(--line);
+    border-radius:8px;padding:5px 8px;font-family:'JetBrains Mono';font-size:11px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -220,6 +232,19 @@
             <tbody id="rows"></tbody>
           </table>
         </div>
+        <div class="tbl-controls">
+          <span class="pg-info" id="pgInfo">—</span>
+          <div class="pg-size">
+            <span>Rows per page</span>
+            <select id="pgSize" onchange="setPageSize(+this.value)">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div class="pg-btns" id="pgBtns"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -298,7 +323,7 @@ function parse(text,fx){
 }
 
 /* ---------- state + render ---------- */
-let TX=[];
+let TX=[], PAGE=0, PAGE_SIZE=25;
 const NGN=n=>'₦'+Math.round(n).toLocaleString('en-NG');
 function compact(n){ if(n>=1e6)return'₦'+(n/1e6).toFixed(1)+'m'; if(n>=1e3)return'₦'+(n/1e3).toFixed(0)+'k'; return'₦'+Math.round(n);}
 
@@ -351,14 +376,42 @@ function render(){
     `<div class="bar"><div class="top"><span>${p}</span><span class="amt">${NGN(v)}</span></div>`+
     `<div class="track"><div class="fill" style="width:${Math.max(6,v/max*100)}%;background:var(--green)"></div></div></div>`).join('');
 
-  // table
-  rows.innerHTML=TX.map((t,i)=>
-    `<tr><td class="party">${t.party}${t.fx?' <span class="tag">FX</span>':''}</td>`+
-    `<td><span class="src">${t.source}</span></td>`+
-    `<td><select onchange="recat(${i},this.value)">${CATS.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}<option value="__custom__">✎ Custom…</option></select></td>`+
-    `<td style="text-align:right" class="${t.dir==='in'?'amt-in':'amt-out'}">${t.dir==='in'?'+':'−'}${NGN(t.amount)}</td></tr>`).join('');
+  // table — paginated
+  renderTable();
   renderSubs();
 }
+function renderTable(){
+  const rows=document.getElementById('rows');
+  const info=document.getElementById('pgInfo');
+  const btns=document.getElementById('pgBtns');
+  if(!TX.length){
+    rows.innerHTML='<tr><td colspan="4" class="empty">No transactions yet — paste alerts and hit Analyze.</td></tr>';
+    info.textContent='—'; btns.innerHTML=''; return;
+  }
+  const total=TX.length, pages=Math.ceil(total/PAGE_SIZE);
+  if(PAGE>=pages) PAGE=pages-1;
+  const start=PAGE*PAGE_SIZE, end=Math.min(start+PAGE_SIZE,total);
+  const slice=TX.slice(start,end);
+  rows.innerHTML=slice.map((t,si)=>{
+    const i=start+si;
+    return `<tr><td class="party">${t.party}${t.fx?' <span class="tag">FX</span>':''}</td>`+
+      `<td><span class="src">${t.source}</span></td>`+
+      `<td><select onchange="recat(${i},this.value)">${CATS.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}<option value="__custom__">✎ Custom…</option></select></td>`+
+      `<td style="text-align:right" class="${t.dir==='in'?'amt-in':'amt-out'}">${t.dir==='in'?'+':'−'}${NGN(t.amount)}</td></tr>`;
+  }).join('');
+  info.textContent=`${start+1}–${end} of ${total} transactions`;
+  // page buttons — show at most 5 page numbers
+  const delta=2, lo=Math.max(0,PAGE-delta), hi=Math.min(pages-1,PAGE+delta);
+  let html=`<button class="pg-btn" onclick="goPage(${PAGE-1})" ${PAGE===0?'disabled':''}>‹</button>`;
+  if(lo>0) html+=`<button class="pg-btn" onclick="goPage(0)">1</button>${lo>1?'<span class="pg-info">…</span>':''}`;
+  for(let p=lo;p<=hi;p++) html+=`<button class="pg-btn${p===PAGE?' active':''}" onclick="goPage(${p})">${p+1}</button>`;
+  if(hi<pages-1) html+=`${hi<pages-2?'<span class="pg-info">…</span>':''}<button class="pg-btn" onclick="goPage(${pages-1})">${pages}</button>`;
+  html+=`<button class="pg-btn" onclick="goPage(${PAGE+1})" ${PAGE===pages-1?'disabled':''}>›</button>`;
+  btns.innerHTML=html;
+}
+function goPage(p){ PAGE=p; renderTable(); }
+function setPageSize(n){ PAGE_SIZE=n; PAGE=0; renderTable(); }
+
 function drawDonut(cats,total){
   const svg=document.getElementById('donut');const cx=66,cy=66,r=50,sw=18;let off=0;
   if(!total){svg.innerHTML='';return;}
@@ -412,7 +465,7 @@ function analyze(){
   const fx=parseFloat(document.getElementById('fx').value)||1600;
   const txt=document.getElementById('input').value.trim();
   if(!txt){loadSample();return;}
-  TX=parse(txt,fx);
+  TX=parse(txt,fx); PAGE=0;
   document.getElementById('sampleNote').classList.add('hide');
   render();
 }
