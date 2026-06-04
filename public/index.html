@@ -186,6 +186,19 @@
   .tweak-row label{flex:1;color:var(--muted)}
   .tweak-row input[type=range]{width:90px;accent-color:var(--green)}
   .tweak-row .tw-val{font-family:'JetBrains Mono';font-size:11px;color:var(--cream);width:32px;text-align:right}
+  /* date filter + share bar */
+  .ctrl-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    margin-top:14px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .pills{display:flex;gap:5px}
+  .pill{font-family:'JetBrains Mono';font-size:11px;padding:5px 12px;border-radius:20px;
+    cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted);transition:.15s}
+  .pill:hover{color:var(--cream);border-color:var(--muted)}
+  .pill.on{background:var(--green);color:#06210f;border-color:var(--green)}
+  .ctrl-right{display:flex;gap:7px}
+  .ctrl-btn{font-family:'JetBrains Mono';font-size:11px;padding:5px 12px;border-radius:20px;
+    cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted);transition:.15s;white-space:nowrap}
+  .ctrl-btn:hover{color:var(--cream);border-color:var(--muted)}
+  .filter-note{font-family:'JetBrains Mono';font-size:10px;color:var(--gold);margin-top:6px;display:none}
   .tbl-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
     gap:10px;margin-top:14px}
   .pg-info{font-family:'JetBrains Mono';font-size:11px;color:var(--muted)}
@@ -233,7 +246,6 @@
       </div>
       <div class="btn-row">
         <button class="b-ghost" style="flex:1" onclick="document.getElementById('file').click()">⤒ Import file</button>
-        <button class="b-ghost" style="flex:1" onclick="exportJSON()">⤓ Export JSON</button>
       </div>
       <input id="file" type="file" accept=".txt,.eml,.csv,.text" style="display:none" onchange="importFile(this)">
     </div>
@@ -241,6 +253,21 @@
     <!-- DASHBOARD -->
     <div id="dash">
       <div class="sample-note" id="sampleNote">✦ Showing sample data — paste your own alerts on the left and hit Analyze to replace it.</div>
+
+      <div class="ctrl-bar">
+        <div class="pills">
+          <button class="pill on" id="pill_all" onclick="setFilter(null)">All</button>
+          <button class="pill" id="pill_7"   onclick="setFilter(7)">1W</button>
+          <button class="pill" id="pill_30"  onclick="setFilter(30)">1M</button>
+          <button class="pill" id="pill_90"  onclick="setFilter(90)">3M</button>
+        </div>
+        <div class="ctrl-right">
+          <button class="ctrl-btn" onclick="exportCSV()">⤓ CSV</button>
+          <button class="ctrl-btn" onclick="exportJSON()">⤓ JSON</button>
+          <button class="ctrl-btn" id="shareBtn" onclick="shareLink()">⎘ Share</button>
+        </div>
+      </div>
+      <div class="filter-note" id="filterNote"></div>
 
       <div class="kpis">
         <div class="kpi in"><div class="l">Money In</div><div class="v" id="kIn">₦0</div></div>
@@ -430,11 +457,27 @@ function parse(text,fx){
 }
 
 /* ---------- state + render ---------- */
-let TX=[], PAGE=0, PAGE_SIZE=25;
+let TX=[], VW=[], PAGE=0, PAGE_SIZE=25, FILTER_DAYS=null;
+function getView(){
+  if(!FILTER_DAYS) return TX;
+  const cutoff=new Date();cutoff.setUTCDate(cutoff.getUTCDate()-FILTER_DAYS);
+  const cs=cutoff.toISOString().slice(0,10);
+  return TX.filter(t=>!t.date||t.date>=cs);
+}
+function setFilter(days){
+  FILTER_DAYS=days; PAGE=0;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));
+  document.getElementById('pill_'+(days||'all')).classList.add('on');
+  const note=document.getElementById('filterNote');
+  if(days){note.style.display='block';note.textContent=`Showing last ${days===7?'7 days':days===30?'30 days':'90 days'} · transactions without dates always included`;}
+  else note.style.display='none';
+  render();
+}
 const NGN=n=>'₦'+Math.round(n).toLocaleString('en-NG');
 function compact(n){ if(n>=1e6)return'₦'+(n/1e6).toFixed(1)+'m'; if(n>=1e3)return'₦'+(n/1e3).toFixed(0)+'k'; return'₦'+Math.round(n);}
 
 function render(){
+  VW=getView();
   const rows=document.getElementById('rows');
   if(!TX.length){ document.getElementById('dash').querySelectorAll('.kpi .v').forEach(e=>e.textContent='₦0');
     rows.innerHTML='<tr><td colspan="4" class="empty">No transactions yet — paste alerts and hit Analyze.</td></tr>';
@@ -449,24 +492,24 @@ function render(){
     document.getElementById('scoreFactors').innerHTML='';document.getElementById('gauge').innerHTML='';
     document.getElementById('scoreGrade').textContent='—';return; }
 
-  const inSum=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
-  const outSum=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
+  const inSum=VW.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
+  const outSum=VW.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
   document.getElementById('kIn').innerHTML=compact(inSum);
   document.getElementById('kOut').innerHTML=compact(outSum);
   const net=inSum-outSum;
   document.getElementById('kNet').innerHTML=(net<0?'−':'')+compact(Math.abs(net));
   document.getElementById('kNet').style.color=net<0?'var(--red)':'var(--green)';
-  document.getElementById('kCount').textContent=TX.length;
+  document.getElementById('kCount').textContent=VW.length;
 
   // category totals (outflow)
   const byCat={};
-  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  VW.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
   const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
 
   // insight
   if(cats.length){
     const [tc,tv]=cats[0];
-    const biggest=TX.filter(t=>t.dir==='out').sort((a,b)=>b.amount-a.amount)[0];
+    const biggest=VW.filter(t=>t.dir==='out').sort((a,b)=>b.amount-a.amount)[0];
     const pct=Math.round(tv/outSum*100);
     document.getElementById('insight').innerHTML=
       `Your biggest drain was <b>${tc}</b> at <b>${NGN(tv)}</b> — about ${pct}% of everything you spent. `+
@@ -483,7 +526,7 @@ function render(){
 
   // top recipients
   const byParty={};
-  TX.filter(t=>t.dir==='out').forEach(t=>byParty[t.party]=(byParty[t.party]||0)+t.amount);
+  VW.filter(t=>t.dir==='out').forEach(t=>byParty[t.party]=(byParty[t.party]||0)+t.amount);
   const parties=Object.entries(byParty).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const max=parties.length?parties[0][1]:1;
   document.getElementById('bars').innerHTML=parties.map(([p,v])=>
@@ -561,7 +604,7 @@ function recat(i,c){
 
 const SUB_KW=/dstv|gotv|startimes|netflix|spotify|youtube|apple|google one|digitalocean|vercel|\baws\b|github|openai|anthropic|canva|adobe|microsoft|figma|notion|linkedin|prime|subscription/i;
 function findSubs(){
-  const out=TX.filter(t=>t.dir==='out');const map={};
+  const out=VW.filter(t=>t.dir==='out');const map={};
   out.forEach(t=>{const k=t.party.toLowerCase();(map[k]=map[k]||[]).push(t);});
   const subs=[];
   for(const k in map){const g=map[k];
@@ -596,10 +639,34 @@ function analyze(){
 function clearAll(){pendo.track('dashboard_cleared');document.getElementById('input').value='';TX=[];
   document.getElementById('sampleNote').classList.add('hide');render();}
 function exportJSON(){
-  pendo.track('json_exported', { transactionCount: TX.length });
-  const blob=new Blob([JSON.stringify(TX,null,2)],{type:'application/json'});
+  pendo.track('json_exported', { transactionCount: VW.length });
+  const blob=new Blob([JSON.stringify(VW,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='spend-sense-export.json';a.click();
+}
+function exportCSV(){
+  pendo.track('csv_exported', { transactionCount: VW.length });
+  const hdr='Party,Source,Category,Direction,Amount,Date';
+  const rows=VW.map(t=>[
+    `"${t.party.replace(/"/g,'""')}"`,t.source,
+    `"${t.category.replace(/"/g,'""')}"`,
+    t.dir==='in'?'In':'Out',
+    t.amount.toFixed(2),
+    t.date||''
+  ].join(','));
+  const blob=new Blob([[hdr,...rows].join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='spend-sense-export.csv';a.click();
+}
+function shareLink(){
+  const sid=new URLSearchParams(location.search).get('s');
+  const url=sid?location.href:`${location.origin}${location.pathname}`;
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=document.getElementById('shareBtn');
+    btn.textContent='✓ Copied';btn.style.color='var(--green)';
+    setTimeout(()=>{btn.textContent='⎘ Share';btn.style.color='';},2000);
+  }).catch(()=>prompt('Copy this link:',url));
+  pendo.track('share_link_copied');
 }
 const SAMPLE=`You just sent ₦35,000.00 to Christian Onuh - Foodstuff. Love, The Kuda Team.
 Hi Kalu, you just sent ₦220,000.00 to Sunrise Apartments - Rent. The Kuda Team.
@@ -637,11 +704,11 @@ let SW=JSON.parse(localStorage.getItem('ss_score_weights')||'{"base":700,"sav":1
 function saveWeights(){localStorage.setItem('ss_score_weights',JSON.stringify(SW));}
 
 function calcScore(){
-  const inSum=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
-  const outSum=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
+  const inSum=VW.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
+  const outSum=VW.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
   if(!outSum) return {score:SW.base,factors:[]};
   const byCat={};
-  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  VW.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
   let score=SW.base;
   const factors=[];
 
@@ -766,7 +833,7 @@ function toggleTweak(){
 /* ---- Timeline ---- */
 function renderTimeline(){
   const el=document.getElementById('timeline');
-  const dated=TX.filter(t=>t.dir==='out'&&t.date);
+  const dated=VW.filter(t=>t.dir==='out'&&t.date);
   if(dated.length<2){
     el.innerHTML='<div class="tl-empty">Import from Gmail to see your spending timeline — email dates power this chart.</div>';return;
   }
@@ -798,7 +865,7 @@ function saveBudgets(){localStorage.setItem('ss_budgets',JSON.stringify(BUDGETS)
 function renderBudget(){
   const el=document.getElementById('budgetRows');
   const byCat={};
-  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  VW.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
   const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   if(!cats.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:6px 0">No spending data yet.</div>';return;}
   el.innerHTML=cats.map(([cat,spent])=>{
@@ -830,7 +897,7 @@ function editBudget(cat){
 function renderSavings(){
   const el=document.getElementById('savingsRows');
   const byCat={};
-  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  VW.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
   const top=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
   if(!top.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:6px 0">No spending data yet.</div>';return;}
   el.innerHTML=top.map(([cat,amt],i)=>
