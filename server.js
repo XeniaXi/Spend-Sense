@@ -15,6 +15,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { parse, summarize, findSubscriptions } from "./parser.js";
+import { google } from "googleapis";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -127,6 +128,79 @@ app.get("/api/session/:id", (req, res) => {
 });
 
 app.get("/healthz", (_req, res) => res.send("ok"));
+
+// --- Gmail OAuth import ---
+const GMAIL_REDIRECT = `${PUBLIC_BASE}/auth/gmail/callback`;
+function gmailOAuth2() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    GMAIL_REDIRECT
+  );
+}
+
+app.get("/auth/gmail", (req, res) => {
+  if (!process.env.GOOGLE_CLIENT_ID) return res.status(503).send("Gmail import not configured.");
+  const auth = gmailOAuth2();
+  const url = auth.generateAuthUrl({
+    access_type: "online",
+    scope: ["https://www.googleapis.com/auth/gmail.readonly"],
+    prompt: "select_account",
+  });
+  res.redirect(url);
+});
+
+app.get("/auth/gmail/callback", async (req, res) => {
+  const { code, error } = req.query;
+  if (error || !code) return res.redirect("/?error=gmail_denied");
+  try {
+    const auth = gmailOAuth2();
+    const { tokens } = await auth.getToken(code);
+    auth.setCredentials(tokens);
+
+    const gmail = google.gmail({ version: "v1", auth });
+    const BANK_QUERY =
+      "(from:kuda OR from:opay OR from:moniepoint OR from:nala OR from:bybit OR " +
+      "from:gtbank OR from:accessbank OR from:firstbank OR " +
+      'subject:"transfer successful" OR subject:"debit alert" OR subject:"credit alert") newer_than:90d';
+
+    const listRes = await gmail.users.messages.list({ userId: "me", q: BANK_QUERY, maxResults: 100 });
+    const messages = listRes.data.messages || [];
+    if (!messages.length) return res.redirect("/?error=no_alerts");
+
+    // Decode base64url body parts
+    function extractText(payload) {
+      if (!payload) return "";
+      if (payload.mimeType === "text/plain" && payload.body?.data)
+        return Buffer.from(payload.body.data, "base64url").toString("utf8");
+      if (payload.parts) { for (const p of payload.parts) { const t = extractText(p); if (t) return t; } }
+      return payload.snippet || "";
+    }
+
+    const texts = [];
+    // Fetch up to 60 messages in parallel batches of 10
+    for (let i = 0; i < Math.min(messages.length, 60); i += 10) {
+      const batch = messages.slice(i, i + 10);
+      const results = await Promise.all(batch.map(m =>
+        gmail.users.messages.get({ userId: "me", id: m.id, format: "full" })
+          .then(r => extractText(r.data.payload) || r.data.snippet || "")
+          .catch(() => "")
+      ));
+      texts.push(...results.filter(Boolean));
+    }
+
+    const combined = texts.join("\n\n");
+    const tx = parse(combined, parseFloat(process.env.FX_RATE) || 1600);
+    if (!tx.length) return res.redirect("/?error=no_transactions");
+
+    const id = saveSession(tx);
+    res.redirect(`/?s=${id}&source=gmail&count=${tx.length}`);
+  } catch (e) {
+    console.error("Gmail import error:", e.message);
+    res.redirect("/?error=gmail_failed");
+  }
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.listen(PORT, () => console.log(`Spend Sense on :${PORT}  (MCP at /mcp)`));
