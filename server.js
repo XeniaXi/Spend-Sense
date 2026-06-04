@@ -164,32 +164,22 @@ app.get("/auth/gmail/callback", async (req, res) => {
       "from:gtbank OR from:accessbank OR from:firstbank OR " +
       'subject:"transfer successful" OR subject:"debit alert" OR subject:"credit alert") newer_than:90d';
 
+    // Fetch message list with snippets — minimal format is fast and snippets contain enough
+    // data for our parser (amount, direction, party name are all in the snippet text)
     const listRes = await gmail.users.messages.list({ userId: "me", q: BANK_QUERY, maxResults: 100 });
     const messages = listRes.data.messages || [];
     if (!messages.length) return res.redirect("/?error=no_alerts");
 
-    // Decode base64url body parts
-    function extractText(payload) {
-      if (!payload) return "";
-      if (payload.mimeType === "text/plain" && payload.body?.data)
-        return Buffer.from(payload.body.data, "base64url").toString("utf8");
-      if (payload.parts) { for (const p of payload.parts) { const t = extractText(p); if (t) return t; } }
-      return payload.snippet || "";
-    }
-
-    const texts = [];
-    // Fetch up to 60 messages in parallel batches of 10
-    for (let i = 0; i < Math.min(messages.length, 60); i += 10) {
-      const batch = messages.slice(i, i + 10);
-      const results = await Promise.all(batch.map(m =>
-        gmail.users.messages.get({ userId: "me", id: m.id, format: "full" })
-          .then(r => extractText(r.data.payload) || r.data.snippet || "")
+    // Fetch snippets in parallel — minimal format returns snippet without downloading full body
+    const snippets = await Promise.all(
+      messages.slice(0, 100).map(m =>
+        gmail.users.messages.get({ userId: "me", id: m.id, format: "minimal" })
+          .then(r => r.data.snippet || "")
           .catch(() => "")
-      ));
-      texts.push(...results.filter(Boolean));
-    }
+      )
+    );
 
-    const combined = texts.join("\n\n");
+    const combined = snippets.filter(Boolean).join("\n\n");
     const tx = parse(combined, parseFloat(process.env.FX_RATE) || 1600);
     if (!tx.length) return res.redirect("/?error=no_transactions");
 
