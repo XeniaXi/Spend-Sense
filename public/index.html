@@ -164,6 +164,28 @@
   .sav-total{margin-top:16px;padding:13px 15px;background:rgba(56,224,138,.1);
     border:1px solid rgba(56,224,138,.3);border-radius:10px;font-size:14px;line-height:1.5}
   .sav-total b{color:var(--green);font-style:normal}
+  /* spend score */
+  .score-wrap{display:grid;grid-template-columns:200px 1fr;gap:22px;align-items:start}
+  @media(max-width:640px){.score-wrap{grid-template-columns:1fr}}
+  .gauge-box{display:flex;flex-direction:column;align-items:center}
+  .score-num{font-family:'Instrument Serif',serif;font-size:52px;line-height:1;margin-top:-18px;font-weight:400}
+  .score-label{font-family:'JetBrains Mono';font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-top:3px}
+  .score-range{font-family:'JetBrains Mono';font-size:9px;color:var(--muted);margin-top:3px}
+  .factors{display:flex;flex-direction:column;gap:7px}
+  .factor{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;gap:10px}
+  .factor .fd{color:var(--muted);font-size:11px;font-family:'JetBrains Mono'}
+  .factor .fv{font-family:'JetBrains Mono';font-size:12px;font-weight:700;white-space:nowrap}
+  .fv.pos{color:var(--green)} .fv.neg{color:var(--red)}
+  .tweak-toggle{font-family:'JetBrains Mono';font-size:10.5px;color:var(--muted);cursor:pointer;
+    border:1px solid var(--line);border-radius:6px;padding:4px 10px;margin-top:14px;display:inline-block;transition:.15s}
+  .tweak-toggle:hover{color:var(--cream);border-color:var(--muted)}
+  .tweak-panel{margin-top:14px;padding:14px;background:var(--bg);border:1px solid var(--line);border-radius:10px;display:none}
+  .tweak-panel.open{display:block}
+  .tweak-row{display:flex;align-items:center;gap:10px;font-size:12px;margin-bottom:9px}
+  .tweak-row:last-child{margin-bottom:0}
+  .tweak-row label{flex:1;color:var(--muted)}
+  .tweak-row input[type=range]{width:90px;accent-color:var(--green)}
+  .tweak-row .tw-val{font-family:'JetBrains Mono';font-size:11px;color:var(--cream);width:32px;text-align:right}
   .tbl-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
     gap:10px;margin-top:14px}
   .pg-info{font-family:'JetBrains Mono';font-size:11px;color:var(--muted)}
@@ -228,6 +250,42 @@
       </div>
 
       <div class="hero"><div class="k">The headline</div><p id="insight">—</p></div>
+
+      <div class="panel" style="margin-top:18px">
+        <div class="sec-title"><h3>Spend Score</h3><span id="scoreGrade">—</span></div>
+        <div class="score-wrap">
+          <div class="gauge-box">
+            <svg id="gauge" width="200" height="110" viewBox="0 0 200 110"></svg>
+            <div class="score-num" id="scoreNum">—</div>
+            <div class="score-label" id="scoreLabel">—</div>
+            <div class="score-range">300 · · · · · 850</div>
+          </div>
+          <div>
+            <div class="factors" id="scoreFactors"></div>
+            <span class="tweak-toggle" onclick="toggleTweak()">⚙ Tweak weights</span>
+            <div class="tweak-panel" id="tweakPanel">
+              <div class="tweak-row"><label>Base score</label>
+                <input type="range" id="tw_base" min="500" max="800" step="10" oninput="applyTweak()">
+                <span class="tw-val" id="tv_base">700</span></div>
+              <div class="tweak-row"><label>Savings bonus</label>
+                <input type="range" id="tw_sav" min="0" max="2" step="0.1" oninput="applyTweak()">
+                <span class="tw-val" id="tv_sav">1×</span></div>
+              <div class="tweak-row"><label>Budget discipline</label>
+                <input type="range" id="tw_bud" min="0" max="2" step="0.1" oninput="applyTweak()">
+                <span class="tw-val" id="tv_bud">1×</span></div>
+              <div class="tweak-row"><label>Fees penalty</label>
+                <input type="range" id="tw_fee" min="0" max="2" step="0.1" oninput="applyTweak()">
+                <span class="tw-val" id="tv_fee">1×</span></div>
+              <div class="tweak-row"><label>Transfers penalty</label>
+                <input type="range" id="tw_txf" min="0" max="2" step="0.1" oninput="applyTweak()">
+                <span class="tw-val" id="tv_txf">1×</span></div>
+              <div class="tweak-row"><label>Subscriptions</label>
+                <input type="range" id="tw_sub" min="0" max="2" step="0.1" oninput="applyTweak()">
+                <span class="tw-val" id="tv_sub">1×</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="cols">
         <div class="panel">
@@ -386,7 +444,10 @@ function render(){
     document.getElementById('subs').innerHTML='';document.getElementById('subTotal').textContent='—';
     document.getElementById('timeline').innerHTML='<div class="tl-empty">No data yet.</div>';
     document.getElementById('budgetRows').innerHTML='';document.getElementById('savingsRows').innerHTML='';
-    document.getElementById('savingsTotal').innerHTML='';return; }
+    document.getElementById('savingsTotal').innerHTML='';
+    document.getElementById('scoreNum').textContent='—';document.getElementById('scoreLabel').textContent='—';
+    document.getElementById('scoreFactors').innerHTML='';document.getElementById('gauge').innerHTML='';
+    document.getElementById('scoreGrade').textContent='—';return; }
 
   const inSum=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
   const outSum=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
@@ -435,6 +496,7 @@ function render(){
   renderTimeline();
   renderBudget();
   renderSavings();
+  renderScore();
   pendo.pageLoad();
 }
 function renderTable(){
@@ -569,6 +631,137 @@ function loadSample(){
   if (!vid) { vid = 'anon-' + crypto.randomUUID(); localStorage.setItem('ss_vid', vid); }
   pendo.initialize({ visitor: { id: vid } });
 })();
+
+/* ---- Spend Score ---- */
+let SW=JSON.parse(localStorage.getItem('ss_score_weights')||'{"base":700,"sav":1,"bud":1,"fee":1,"txf":1,"sub":1}');
+function saveWeights(){localStorage.setItem('ss_score_weights',JSON.stringify(SW));}
+
+function calcScore(){
+  const inSum=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
+  const outSum=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
+  if(!outSum) return {score:SW.base,factors:[]};
+  const byCat={};
+  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  let score=SW.base;
+  const factors=[];
+
+  // 1. Savings rate
+  if(inSum>0){
+    const net=inSum-outSum, rate=net/inSum;
+    if(net>0){
+      const b=Math.round(Math.min(rate*200,80)*SW.sav);
+      score+=b; factors.push({label:'Net savings',detail:`${Math.round(rate*100)}% of income saved`,delta:b});
+    } else {
+      const p=Math.round(Math.min(Math.abs(rate)*80,60)*SW.sav);
+      score-=p; factors.push({label:'Spending exceeds income',detail:`outflow ${NGN(Math.abs(net))} over inflow`,delta:-p});
+    }
+  }
+
+  // 2. Fees & Charges
+  const feePct=(byCat['Fees & Charges']||0)/outSum*100;
+  if(feePct>2){
+    const p=Math.round(Math.min((feePct-2)*8,40)*SW.fee);
+    score-=p; factors.push({label:'High bank fees',detail:`${feePct.toFixed(1)}% of spend`,delta:-p});
+  } else {
+    const b=Math.round(12*SW.fee);
+    score+=b; factors.push({label:'Low bank fees',detail:`${feePct.toFixed(1)}% of spend`,delta:b});
+  }
+
+  // 3. Untracked cash / Transfers
+  const txfPct=(byCat['Transfers & Cash']||0)/outSum*100;
+  if(txfPct>30){
+    const p=Math.round(Math.min((txfPct-30)/5*8,40)*SW.txf);
+    score-=p; factors.push({label:'High untracked spend',detail:`${txfPct.toFixed(0)}% in Transfers & Cash`,delta:-p});
+  } else if(txfPct<15){
+    const b=Math.round(10*SW.txf);
+    score+=b; factors.push({label:'Good spend visibility',detail:`only ${txfPct.toFixed(0)}% untracked`,delta:b});
+  }
+
+  // 4. Budget discipline
+  const budgetCats=Object.keys(BUDGETS);
+  if(budgetCats.length>0){
+    const over=budgetCats.filter(c=>(byCat[c]||0)>BUDGETS[c]);
+    if(over.length>0){
+      const excess=over.reduce((a,c)=>a+(byCat[c]-BUDGETS[c]),0);
+      const p=Math.round(Math.min(over.length*15+excess/outSum*60,80)*SW.bud);
+      score-=p; factors.push({label:`Over budget (${over.length} ${over.length===1?'category':'categories'})`,detail:`exceeded by ${NGN(excess)}`,delta:-p});
+    } else {
+      const b=Math.round(25*SW.bud);
+      score+=b; factors.push({label:'All budgets on track',detail:'no overruns this period',delta:b});
+    }
+  }
+
+  // 5. Subscription load vs income
+  if(inSum>0){
+    const subAmt=['Telecom & Data','Utilities & Bills','Infrastructure / SaaS']
+      .reduce((a,c)=>a+(byCat[c]||0),0);
+    const subPct=subAmt/inSum*100;
+    if(subPct>20){
+      const p=Math.round(Math.min((subPct-20)*2,30)*SW.sub);
+      score-=p; factors.push({label:'Heavy subscription load',detail:`${subPct.toFixed(0)}% of income on recurring`,delta:-p});
+    } else if(subPct>0){
+      const b=Math.round(12*SW.sub);
+      score+=b; factors.push({label:'Healthy subscription ratio',detail:`${subPct.toFixed(0)}% of income`,delta:b});
+    }
+  }
+
+  return {score:Math.max(300,Math.min(850,Math.round(score))),
+    factors:factors.sort((a,b)=>a.delta-b.delta)};
+}
+
+function drawGauge(score){
+  const pct=(score-300)/550;
+  const col=score>=700?'#38e08a':score>=550?'#e8b24a':'#ff6f6f';
+  const cx=100,cy=100,r=78,sw=13;
+  // arc from 180° going clockwise — 180° sweep for a semicircle
+  const fillDeg=180*pct;
+  function arc(deg){
+    const rad=(180-deg)*Math.PI/180;
+    return {x:cx+r*Math.cos(rad), y:cy-r*Math.sin(rad)};
+  }
+  const s=arc(0), e=arc(fillDeg), large=fillDeg>180?1:0;
+  const bg=`<path d="M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}" fill="none" stroke="#2a302a" stroke-width="${sw}" stroke-linecap="round"/>`;
+  const fill=fillDeg>1?`<path d="M ${cx-r} ${cy} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(1)} ${e.y.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round" style="transition:stroke-dasharray .6s"/>`:'' ;
+  document.getElementById('gauge').innerHTML=bg+fill;
+}
+
+function scoreLabel(s){return s>=750?'Excellent':s>=700?'Great':s>=620?'Good':s>=500?'Fair':s>=400?'Needs work':'Poor';}
+function scoreGrade(s){return s>=750?'A':s>=700?'B':s>=620?'C':s>=500?'D':'F';}
+
+function renderScore(){
+  const {score,factors}=calcScore();
+  const col=score>=700?'var(--green)':score>=550?'var(--gold)':'var(--red)';
+  drawGauge(score);
+  document.getElementById('scoreNum').textContent=score;
+  document.getElementById('scoreNum').style.color=col;
+  document.getElementById('scoreLabel').textContent=scoreLabel(score);
+  document.getElementById('scoreLabel').style.color=col;
+  document.getElementById('scoreGrade').textContent=`Grade ${scoreGrade(score)}`;
+  document.getElementById('scoreFactors').innerHTML=factors.map(f=>
+    `<div class="factor">
+      <div><div>${f.label}</div><div class="fd">${f.detail}</div></div>
+      <span class="fv ${f.delta>=0?'pos':'neg'}">${f.delta>=0?'+':''}${f.delta}</span>
+    </div>`).join('');
+  // sync sliders to current weights
+  ['base','sav','bud','fee','txf','sub'].forEach(k=>{
+    const el=document.getElementById('tw_'+k);
+    if(el&&el.value!=SW[k]){ el.value=SW[k];
+      document.getElementById('tv_'+k).textContent=k==='base'?SW[k]:SW[k]+'×'; }
+  });
+}
+
+function applyTweak(){
+  SW.base=+document.getElementById('tw_base').value;
+  ['sav','bud','fee','txf','sub'].forEach(k=>{
+    SW[k]=parseFloat(document.getElementById('tw_'+k).value);
+    document.getElementById('tv_'+k).textContent=SW[k].toFixed(1)+'×';
+  });
+  document.getElementById('tv_base').textContent=SW.base;
+  saveWeights(); renderScore();
+}
+function toggleTweak(){
+  document.getElementById('tweakPanel').classList.toggle('open');
+}
 
 /* ---- Timeline ---- */
 function renderTimeline(){
