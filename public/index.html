@@ -198,7 +198,7 @@
       <textarea id="input" spellcheck="false" placeholder="e.g.&#10;You just sent ₦35,000.00 to Christian Onuh - Foodstuff&#10;Your transfer of ₦2,700.00 is successful. Name: NNPC Filling Station&#10;Glo data ₦3,000 recharge successful"></textarea>
       <div class="fx">
         <span>USD alerts convert at ₦</span>
-        <input id="fx" class="mono" type="number" value="1600" min="1">
+        <input id="fx" class="mono" type="number" value="1600" min="1" onchange="pendo.track('fx_rate_changed',{rate:+this.value})">
         <span>/ $1</span>
       </div>
       <div class="btn-row">
@@ -410,6 +410,7 @@ function render(){
     document.getElementById('insight').innerHTML=
       `Your biggest drain was <b>${tc}</b> at <b>${NGN(tv)}</b> — about ${pct}% of everything you spent. `+
       `The single largest hit: <b>${NGN(biggest.amount)}</b> to ${biggest.party}.`;
+    pendo.track('spending_insight_generated', { topCategory: tc, topCategoryPercent: pct });
   }
 
   // donut
@@ -434,6 +435,7 @@ function render(){
   renderTimeline();
   renderBudget();
   renderSavings();
+  pendo.pageLoad();
 }
 function renderTable(){
   const rows=document.getElementById('rows');
@@ -491,6 +493,7 @@ function recat(i,c){
   } else {
     TX[i].category=c;
   }
+  pendo.track('category_changed', { category: TX[i].category, transactionIndex: i });
   render();
 }
 
@@ -509,10 +512,13 @@ function renderSubs(){
   const el=document.getElementById('subs'),st=document.getElementById('subTotal');
   const subs=findSubs();
   if(!subs.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 2px">No recurring patterns detected yet.</div>';st.textContent='—';return;}
+  pendo.track('subscriptions_detected', { count: subs.length, totalAmount: Math.round(subs.reduce((a,x)=>a+x.total,0)) });
   st.textContent='₦'+Math.round(subs.reduce((a,x)=>a+x.total,0)).toLocaleString('en-NG')+' tracked';
   el.innerHTML=subs.map(s=>`<div class="sub"><div><span class="m">${s.m}</span><span class="why">${s.why} · ${s.n}×</span></div><span class="amt">${NGN(s.total)}</span></div>`).join('');
 }
-function importFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
+function importFile(inp){const f=inp.files[0];if(!f)return;
+  pendo.track('file_imported', { fileName: f.name, fileSize: f.size });
+  const r=new FileReader();
   r.onload=()=>{document.getElementById('input').value=r.result;analyze();};r.readAsText(f);}
 
 /* ---------- actions ---------- */
@@ -522,11 +528,13 @@ function analyze(){
   if(!txt){loadSample();return;}
   TX=parse(txt,fx); PAGE=0;
   document.getElementById('sampleNote').classList.add('hide');
+  if(TX.length) pendo.track('alerts_analyzed', { transactionCount: TX.length, source: 'paste' });
   render();
 }
-function clearAll(){document.getElementById('input').value='';TX=[];
+function clearAll(){pendo.track('dashboard_cleared');document.getElementById('input').value='';TX=[];
   document.getElementById('sampleNote').classList.add('hide');render();}
 function exportJSON(){
+  pendo.track('json_exported', { transactionCount: TX.length });
   const blob=new Blob([JSON.stringify(TX,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='spend-sense-export.json';a.click();
@@ -552,10 +560,15 @@ function loadSample(){
   document.getElementById('input').value=SAMPLE;
   TX=parse(SAMPLE,parseFloat(document.getElementById('fx').value)||1600);
   document.getElementById('sampleNote').classList.remove('hide');
+  pendo.track('sample_data_loaded', { transactionCount: TX.length });
   render();
 }
-// Initialize Pendo with anonymous visitor (resolves from cookies if available)
-pendo.initialize({ visitor: { id: '' } });
+// Initialize Pendo with a stable anonymous visitor ID
+(function(){
+  var vid = localStorage.getItem('ss_vid');
+  if (!vid) { vid = 'anon-' + crypto.randomUUID(); localStorage.setItem('ss_vid', vid); }
+  pendo.initialize({ visitor: { id: vid } });
+})();
 
 /* ---- Timeline ---- */
 function renderTimeline(){
@@ -655,6 +668,7 @@ function updateSavings(){
 }
 
 function importGmail(){
+  pendo.track('gmail_import_started');
   const note=document.getElementById('sampleNote');
   note.innerHTML='⏳ Connecting to Gmail…';note.classList.remove('hide');
   window.location.href='/auth/gmail';
@@ -681,6 +695,7 @@ function importGmail(){
           const label=source==='gmail'
             ?'📧 Imported '+count+' transactions from your Gmail bank alerts.'
             :'✦ Loaded from your AI assistant via MCP — '+TX.length+' transactions.';
+          if(source==='gmail') pendo.track('gmail_import_completed', { transactionCount: TX.length });
           n.innerHTML=label; n.classList.remove('hide'); render();
         } else loadSample(); })
       .catch(loadSample);
