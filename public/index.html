@@ -355,7 +355,7 @@ function render(){
   rows.innerHTML=TX.map((t,i)=>
     `<tr><td class="party">${t.party}${t.fx?' <span class="tag">FX</span>':''}</td>`+
     `<td><span class="src">${t.source}</span></td>`+
-    `<td><select onchange="recat(${i},this.value)">${CATS.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}</select></td>`+
+    `<td><select onchange="recat(${i},this.value)">${CATS.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}<option value="__custom__">✎ Custom…</option></select></td>`+
     `<td style="text-align:right" class="${t.dir==='in'?'amt-in':'amt-out'}">${t.dir==='in'?'+':'−'}${NGN(t.amount)}</td></tr>`).join('');
   renderSubs();
 }
@@ -374,7 +374,17 @@ function drawDonut(cats,total){
   html+=`<text x="${cx}" y="${cy+13}" text-anchor="middle" fill="#9aa39a" font-family="JetBrains Mono" font-size="7" letter-spacing="1">SPENT</text>`;
   svg.innerHTML=html;
 }
-function recat(i,c){TX[i].category=c;render();}
+function recat(i,c){
+  if(c==='__custom__'){
+    const name=(prompt('Enter custom category name:')||'').trim();
+    if(!name) return render(); // cancelled — re-render to reset select
+    TX[i].category=name;
+    if(!COLORS[name]) COLORS[name]='#a0a0a0';
+  } else {
+    TX[i].category=c;
+  }
+  render();
+}
 
 const SUB_KW=/dstv|gotv|startimes|netflix|spotify|youtube|apple|google one|digitalocean|vercel|\baws\b|github|openai|anthropic|canva|adobe|microsoft|figma|notion|linkedin|prime|subscription/i;
 function findSubs(){
