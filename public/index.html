@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spend Sense — Where did your Naira go?</title>
+
+<!-- ============================================================
+     NOVUS.AI / PENDO INSTALL  (REQUIRED for the hackathon)
+     1. Sign up at https://novus.pendo.io/register
+     2. Copy your install snippet (it contains your API key)
+     3. Paste it directly below this comment, before </head>
+     4. Redeploy, click around, then screenshot your Novus dashboard
+     ============================================================ -->
+<!-- PASTE NOVUS SNIPPET HERE -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f120f; --panel:#171b16; --panel2:#1e241d; --cream:#f4efe3;
+    --muted:#9aa39a; --green:#38e08a; --gold:#e8b24a; --red:#ff6f6f;
+    --blue:#6fb1ff; --line:#2a302a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--bg);color:var(--cream);
+    font-family:'Hanken Grotesk',sans-serif;line-height:1.5;
+    background-image:radial-gradient(circle at 88% -8%,rgba(56,224,138,.10),transparent 42%),
+      radial-gradient(circle at 0% 100%,rgba(232,178,74,.07),transparent 45%);
+    min-height:100vh;
+  }
+  .mono{font-family:'JetBrains Mono',monospace}
+  .wrap{max-width:1120px;margin:0 auto;padding:26px 22px 70px}
+
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;
+    border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:8px}
+  .brand .mark{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.34em;
+    text-transform:uppercase;color:var(--green)}
+  .brand h1{font-family:'Instrument Serif',serif;font-size:clamp(38px,6vw,62px);
+    line-height:.92;font-weight:400;letter-spacing:-.01em;margin-top:4px}
+  .brand h1 em{color:var(--green);font-style:italic}
+  .brand p{color:var(--muted);font-size:14px;margin-top:6px;max-width:46ch}
+  .gh-badge{font-family:'JetBrains Mono';font-size:11px;color:var(--muted);
+    border:1px solid var(--line);border-radius:30px;padding:7px 13px;white-space:nowrap}
+  .gh-badge b{color:var(--gold)}
+
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:20px;margin-top:26px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .panel h2{font-family:'Instrument Serif',serif;font-size:21px;font-weight:400;margin-bottom:4px}
+  .panel .hint{color:var(--muted);font-size:12.5px;margin-bottom:12px}
+  textarea{width:100%;min-height:240px;resize:vertical;background:var(--bg);color:var(--cream);
+    border:1px solid var(--line);border-radius:11px;padding:12px;font-family:'JetBrains Mono';
+    font-size:12px;line-height:1.6}
+  textarea:focus{outline:none;border-color:var(--green)}
+  .btn-row{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
+  button{font-family:'Hanken Grotesk';font-weight:700;font-size:13.5px;cursor:pointer;
+    border-radius:10px;padding:11px 15px;border:1px solid var(--line);transition:.18s}
+  .b-go{background:var(--green);color:#06210f;border-color:var(--green);flex:1}
+  .b-go:hover{filter:brightness(1.08)}
+  .b-ghost{background:transparent;color:var(--muted)}
+  .b-ghost:hover{color:var(--cream);border-color:var(--muted)}
+  .fx{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:12.5px;color:var(--muted)}
+  .fx input{width:74px;background:var(--bg);border:1px solid var(--line);color:var(--cream);
+    border-radius:8px;padding:6px 8px;font-family:'JetBrains Mono';font-size:12px}
+
+  .sample-note{background:rgba(232,178,74,.1);border:1px solid rgba(232,178,74,.35);
+    color:var(--gold);border-radius:10px;padding:9px 12px;font-size:12.5px;margin-bottom:16px;
+    display:flex;gap:8px;align-items:center}
+  .sample-note.hide{display:none}
+
+  /* KPIs */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+  @media(max-width:620px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px}
+  .kpi .l{font-family:'JetBrains Mono';font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+  .kpi .v{font-family:'Instrument Serif',serif;font-size:30px;line-height:1.05;margin-top:7px}
+  .kpi.in .v{color:var(--green)} .kpi.out .v{color:var(--red)}
+  .kpi .v small{font-size:15px;opacity:.6}
+
+  .hero{background:linear-gradient(135deg,rgba(56,224,138,.13),rgba(232,178,74,.05));
+    border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-top:18px}
+  .hero .k{font-family:'JetBrains Mono';font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--green)}
+  .hero p{font-family:'Instrument Serif',serif;font-size:clamp(20px,2.6vw,27px);margin-top:6px;line-height:1.25}
+  .hero p b{color:var(--gold);font-style:normal;font-weight:400}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+
+  .donut-wrap{display:flex;gap:16px;align-items:center}
+  .legend{display:flex;flex-direction:column;gap:7px;font-size:12.5px;flex:1}
+  .legend .row{display:flex;align-items:center;gap:8px}
+  .legend .dot{width:9px;height:9px;border-radius:2px;flex:none}
+  .legend .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .legend .pc{font-family:'JetBrains Mono';color:var(--muted)}
+
+  .bars{display:flex;flex-direction:column;gap:10px}
+  .bar .top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px}
+  .bar .top .amt{font-family:'JetBrains Mono';color:var(--muted)}
+  .track{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden}
+  .fill{height:100%;border-radius:6px;transition:width .7s cubic-bezier(.2,.7,.2,1)}
+
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}
+  th{text-align:left;font-family:'JetBrains Mono';font-size:10px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);padding:8px 8px;border-bottom:1px solid var(--line)}
+  td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  .party{font-weight:600}
+  .src{font-family:'JetBrains Mono';font-size:10.5px;color:var(--muted)}
+  .amt-out{color:var(--red);font-family:'JetBrains Mono';font-weight:500;white-space:nowrap}
+  .amt-in{color:var(--green);font-family:'JetBrains Mono';font-weight:500;white-space:nowrap}
+  td select{background:var(--bg);color:var(--cream);border:1px solid var(--line);
+    border-radius:7px;padding:5px 7px;font-family:'Hanken Grotesk';font-size:12px;cursor:pointer}
+  .tag{font-size:10px;font-family:'JetBrains Mono';padding:2px 7px;border-radius:20px;
+    background:var(--panel2);color:var(--muted)}
+  .empty{color:var(--muted);text-align:center;padding:40px 0;font-size:14px}
+  .sec-title{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+  .sec-title h3{font-family:'Instrument Serif',serif;font-weight:400;font-size:20px}
+  .sec-title span{font-family:'JetBrains Mono';font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+  footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12px;font-family:'JetBrains Mono'}
+  footer b{color:var(--green)}
+  .subs{display:flex;flex-direction:column;gap:8px}
+  .sub{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;gap:10px}
+  .sub .m{font-weight:600;font-size:13.5px}
+  .sub .why{font-size:9.5px;font-family:'JetBrains Mono';color:var(--muted);background:var(--bg);
+    padding:2px 7px;border-radius:20px;margin-left:8px}
+  .sub .amt{font-family:'JetBrains Mono';color:var(--gold);font-size:13px;white-space:nowrap}
+  #subTotal{font-family:'JetBrains Mono';font-size:10px;color:var(--gold);letter-spacing:.08em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="mark">Spend Sense</div>
+      <h1>Where did your <em>Naira</em> go?</h1>
+      <p>Paste the transaction alerts your bank already sends you — Kuda, Opay, Moniepoint, Nala, Bybit — and see your money, sorted. No bank login. Nothing leaves your browser.</p>
+    </div>
+    <div class="gh-badge">🔒 Runs <b>100% in your browser</b></div>
+  </header>
+
+  <div class="grid">
+    <!-- INPUT -->
+    <div class="panel" style="align-self:start">
+      <h2>Paste your alerts</h2>
+      <div class="hint">One or many. Copy straight from your email or SMS — the parser handles the mess.</div>
+      <textarea id="input" spellcheck="false" placeholder="e.g.&#10;You just sent ₦35,000.00 to Christian Onuh - Foodstuff&#10;Your transfer of ₦2,700.00 is successful. Name: NNPC Filling Station&#10;Glo data ₦3,000 recharge successful"></textarea>
+      <div class="fx">
+        <span>USD alerts convert at ₦</span>
+        <input id="fx" class="mono" type="number" value="1600" min="1">
+        <span>/ $1</span>
+      </div>
+      <div class="btn-row">
+        <button class="b-go" onclick="analyze()">Analyze →</button>
+        <button class="b-ghost" onclick="loadSample()">Sample</button>
+        <button class="b-ghost" onclick="clearAll()">Clear</button>
+      </div>
+      <div class="btn-row">
+        <button class="b-ghost" style="flex:1" onclick="document.getElementById('file').click()">⤒ Import file</button>
+        <button class="b-ghost" style="flex:1" onclick="exportJSON()">⤓ Export JSON</button>
+      </div>
+      <input id="file" type="file" accept=".txt,.eml,.csv,.text" style="display:none" onchange="importFile(this)">
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dash">
+      <div class="sample-note" id="sampleNote">✦ Showing sample data — paste your own alerts on the left and hit Analyze to replace it.</div>
+
+      <div class="kpis">
+        <div class="kpi in"><div class="l">Money In</div><div class="v" id="kIn">₦0</div></div>
+        <div class="kpi out"><div class="l">Money Out</div><div class="v" id="kOut">₦0</div></div>
+        <div class="kpi"><div class="l">Net</div><div class="v" id="kNet">₦0</div></div>
+        <div class="kpi"><div class="l">Transactions</div><div class="v" id="kCount">0</div></div>
+      </div>
+
+      <div class="hero"><div class="k">The headline</div><p id="insight">—</p></div>
+
+      <div class="cols">
+        <div class="panel">
+          <div class="sec-title"><h3>Where it went</h3><span>by category</span></div>
+          <div class="donut-wrap">
+            <svg id="donut" width="132" height="132" viewBox="0 0 132 132"></svg>
+            <div class="legend" id="legend"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="sec-title"><h3>Top recipients</h3><span>outflow</span></div>
+          <div class="bars" id="bars"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:18px">
+        <div class="sec-title"><h3>Recurring &amp; subscriptions</h3><span id="subTotal">—</span></div>
+        <div id="subs" class="subs"></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px">
+        <div class="sec-title"><h3>Transactions</h3><span>edit a category to re-sort</span></div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Counterparty</th><th>Source</th><th>Category</th><th style="text-align:right">Amount</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Spend Sense · built for World Product Day · <b>#EveryoneShipsNow</b></footer>
+</div>
+
+<script>
+/* ---------- categories & rules ---------- */
+const CATS = ["Housing","Education","Food & Dining","Transport & Fuel","Telecom & Data",
+  "Utilities & Bills","Marketing & Ads","Infrastructure / SaaS","Crypto & Trading",
+  "Shopping","Health","Transfers & Cash","Fees & Charges","Income","Uncategorized"];
+const COLORS={"Housing":"#e8b24a","Education":"#6fb1ff","Food & Dining":"#38e08a",
+  "Transport & Fuel":"#ff9f5a","Telecom & Data":"#b08cff","Utilities & Bills":"#5ad0c8",
+  "Marketing & Ads":"#ff6f6f","Infrastructure / SaaS":"#7ee0ff","Crypto & Trading":"#f0d35a",
+  "Shopping":"#ff8cc6","Health":"#7affc0","Transfers & Cash":"#9aa39a","Fees & Charges":"#c98a5a",
+  "Income":"#38e08a","Uncategorized":"#6b756b"};
+const RULES=[
+  ["Housing",/rent|landlord|apartment|accommodation|lease/i],
+  ["Education",/school|tuition|fee|lesson|exam|greenoak|college|waec|jamb/i],
+  ["Food & Dining",/food|restaurant|eatery|kitchen|chicken|pizza|foodco|\bmarket\b|grocer|supermarket|cafe|bukka|shoprite/i],
+  ["Transport & Fuel",/fuel|petrol|filling|nnpc|ardova|diesel|bolt|uber|transport|fare|brt|fuelling/i],
+  ["Telecom & Data",/mtn|glo|airtel|9mobile|airtime|\bdata\b|recharge|\bvtu\b/i],
+  ["Utilities & Bills",/phcn|ekedc|phed|ikedc|electric|dstv|gotv|startimes|\bwater\b|waste|nepa|prepaid/i],
+  ["Marketing & Ads",/facebook\s?ads|facebookads|google\s?ads|\bmeta\b|\bads\b|marketing|boost|campaign/i],
+  ["Infrastructure / SaaS",/digitalocean|vercel|\baws\b|amazon web|cloud|hosting|github|openai|anthropic|server|domain|namecheap|netlify/i],
+  ["Crypto & Trading",/bybit|binance|usdt|crypto|\bp2p\b|luno|quidax|busd|stablecoin/i],
+  ["Shopping",/jumia|konga|\bstore\b|\bmall\b|fashion|temu|amazon|boutique|aliexpress/i],
+  ["Health",/hospital|pharmacy|chemist|clinic|\bdrug|medical|health|optical/i],
+  ["Fees & Charges",/\bfee\b|charge|levy|stamp|\bvat\b|commission|sms charge|maintenance/i],
+  ["Transfers & Cash",/\bpos\b|withdraw|\batm\b|cash|transfer/i],
+];
+function categorize(t){ for(const [c,re] of RULES) if(re.test(t)) return c; return "Uncategorized"; }
+
+/* ---------- parser ---------- */
+function parseAmount(line,fx){
+  let m=line.match(/(?:₦|NGN|N(?=\s?[\d]))\s?([\d,]+(?:\.\d{1,2})?)/i);
+  if(m) return parseFloat(m[1].replace(/,/g,''));
+  m=line.match(/([\d,]+(?:\.\d{1,2})?)\s?(?:USD|\$)/i)||line.match(/(?:USD|\$)\s?([\d,]+(?:\.\d{1,2})?)/i);
+  if(m) return parseFloat(m[1].replace(/,/g,''))*fx;
+  return null;
+}
+function parseParty(line){
+  let m=line.match(/Name:\s*([^\n]+?)(?:\s*Bank:|$)/i); if(m) return clean(m[1]);
+  m=line.match(/^([A-Za-z0-9 .'&\-]+?)\s+just sent you/i); if(m) return clean(m[1]);
+  m=line.match(/\bto\s+([^.\n]+?)(?:\s+[-–]\s+|\.|\bon\b|$)/i); if(m) return clean(m[1]);
+  m=line.match(/\bfrom\s+([^.\n]+?)(?:\.|\bon\b|$)/i); if(m) return clean(m[1]);
+  m=line.match(/\b(MTN|Glo|Airtel|9mobile|DStv|GOtv|StarTimes|NNPC|Ardova)\b/i); if(m) return m[1];
+  return "Unknown";
+}
+function clean(s){return s.replace(/\s+/g,' ').replace(/[-–]\s*$/,'').trim().slice(0,42);}
+function direction(line){
+  if(/sent you|just sent you|credited|\bCR\b|received|payment from|\bfrom\b|deposit|refund/i.test(line)
+     && !/you sent|you just sent/i.test(line)) return "in";
+  return "out";
+}
+function detectSource(line){
+  if(/kuda/i.test(line))return"Kuda"; if(/opay/i.test(line))return"Opay";
+  if(/monie\s?point/i.test(line))return"Moniepoint"; if(/bybit/i.test(line))return"Bybit";
+  if(/nala/i.test(line))return"Nala"; if(/\bgt(bank)?\b/i.test(line))return"GTBank";
+  if(/access/i.test(line))return"Access"; if(/\b(mtn|glo|airtel|9mobile)\b/i.test(line))return"Telco";
+  return"Other";
+}
+function splitBlocks(text){
+  // split on blank lines; if none, split per line
+  let blocks=text.split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
+  if(blocks.length<=1) blocks=text.split(/\n/).map(b=>b.trim()).filter(Boolean);
+  return blocks;
+}
+function parse(text,fx){
+  return splitBlocks(text).map(b=>{
+    const amt=parseAmount(b,fx); if(!amt) return null;
+    return {amount:amt, dir:direction(b), party:parseParty(b), category:categorize(b),
+      source:detectSource(b), fx:/USD|\$/i.test(b)&&!/₦|NGN/i.test(b)};
+  }).filter(Boolean);
+}
+
+/* ---------- state + render ---------- */
+let TX=[];
+const NGN=n=>'₦'+Math.round(n).toLocaleString('en-NG');
+function compact(n){ if(n>=1e6)return'₦'+(n/1e6).toFixed(1)+'m'; if(n>=1e3)return'₦'+(n/1e3).toFixed(0)+'k'; return'₦'+Math.round(n);}
+
+function render(){
+  const rows=document.getElementById('rows');
+  if(!TX.length){ document.getElementById('dash').querySelectorAll('.kpi .v').forEach(e=>e.textContent='₦0');
+    rows.innerHTML='<tr><td colspan="4" class="empty">No transactions yet — paste alerts and hit Analyze.</td></tr>';
+    document.getElementById('insight').textContent='—';
+    document.getElementById('legend').innerHTML='';document.getElementById('bars').innerHTML='';
+    document.getElementById('donut').innerHTML='';
+    document.getElementById('subs').innerHTML='';document.getElementById('subTotal').textContent='—';return; }
+
+  const inSum=TX.filter(t=>t.dir==='in').reduce((a,t)=>a+t.amount,0);
+  const outSum=TX.filter(t=>t.dir==='out').reduce((a,t)=>a+t.amount,0);
+  document.getElementById('kIn').innerHTML=compact(inSum);
+  document.getElementById('kOut').innerHTML=compact(outSum);
+  const net=inSum-outSum;
+  document.getElementById('kNet').innerHTML=(net<0?'−':'')+compact(Math.abs(net));
+  document.getElementById('kNet').style.color=net<0?'var(--red)':'var(--green)';
+  document.getElementById('kCount').textContent=TX.length;
+
+  // category totals (outflow)
+  const byCat={};
+  TX.filter(t=>t.dir==='out').forEach(t=>byCat[t.category]=(byCat[t.category]||0)+t.amount);
+  const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+
+  // insight
+  if(cats.length){
+    const [tc,tv]=cats[0];
+    const biggest=TX.filter(t=>t.dir==='out').sort((a,b)=>b.amount-a.amount)[0];
+    const pct=Math.round(tv/outSum*100);
+    document.getElementById('insight').innerHTML=
+      `Your biggest drain was <b>${tc}</b> at <b>${NGN(tv)}</b> — about ${pct}% of everything you spent. `+
+      `The single largest hit: <b>${NGN(biggest.amount)}</b> to ${biggest.party}.`;
+  }
+
+  // donut
+  drawDonut(cats,outSum);
+  // legend
+  document.getElementById('legend').innerHTML=cats.slice(0,7).map(([c,v])=>
+    `<div class="row"><span class="dot" style="background:${COLORS[c]}"></span>`+
+    `<span class="nm">${c}</span><span class="pc">${Math.round(v/outSum*100)}%</span></div>`).join('');
+
+  // top recipients
+  const byParty={};
+  TX.filter(t=>t.dir==='out').forEach(t=>byParty[t.party]=(byParty[t.party]||0)+t.amount);
+  const parties=Object.entries(byParty).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const max=parties.length?parties[0][1]:1;
+  document.getElementById('bars').innerHTML=parties.map(([p,v])=>
+    `<div class="bar"><div class="top"><span>${p}</span><span class="amt">${NGN(v)}</span></div>`+
+    `<div class="track"><div class="fill" style="width:${Math.max(6,v/max*100)}%;background:var(--green)"></div></div></div>`).join('');
+
+  // table
+  rows.innerHTML=TX.map((t,i)=>
+    `<tr><td class="party">${t.party}${t.fx?' <span class="tag">FX</span>':''}</td>`+
+    `<td><span class="src">${t.source}</span></td>`+
+    `<td><select onchange="recat(${i},this.value)">${CATS.map(c=>`<option ${c===t.category?'selected':''}>${c}</option>`).join('')}</select></td>`+
+    `<td style="text-align:right" class="${t.dir==='in'?'amt-in':'amt-out'}">${t.dir==='in'?'+':'−'}${NGN(t.amount)}</td></tr>`).join('');
+  renderSubs();
+}
+function drawDonut(cats,total){
+  const svg=document.getElementById('donut');const cx=66,cy=66,r=50,sw=18;let off=0;
+  if(!total){svg.innerHTML='';return;}
+  let html='';
+  cats.slice(0,7).forEach(([c,v])=>{
+    const frac=v/total, len=2*Math.PI*r;
+    html+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${COLORS[c]}" stroke-width="${sw}"
+      stroke-dasharray="${frac*len} ${len}" stroke-dashoffset="${-off*len}"
+      transform="rotate(-90 ${cx} ${cy})"></circle>`;
+    off+=frac;
+  });
+  html+=`<text x="${cx}" y="${cy-2}" text-anchor="middle" fill="#f4efe3" font-family="Instrument Serif" font-size="16">${compact(total)}</text>`;
+  html+=`<text x="${cx}" y="${cy+13}" text-anchor="middle" fill="#9aa39a" font-family="JetBrains Mono" font-size="7" letter-spacing="1">SPENT</text>`;
+  svg.innerHTML=html;
+}
+function recat(i,c){TX[i].category=c;render();}
+
+const SUB_KW=/dstv|gotv|startimes|netflix|spotify|youtube|apple|google one|digitalocean|vercel|\baws\b|github|openai|anthropic|canva|adobe|microsoft|figma|notion|linkedin|prime|subscription/i;
+function findSubs(){
+  const out=TX.filter(t=>t.dir==='out');const map={};
+  out.forEach(t=>{const k=t.party.toLowerCase();(map[k]=map[k]||[]).push(t);});
+  const subs=[];
+  for(const k in map){const g=map[k];
+    const kw=SUB_KW.test(g[0].party)||g.some(x=>SUB_KW.test(x.category));
+    if(kw||g.length>=2) subs.push({m:g[0].party,n:g.length,
+      total:g.reduce((s,x)=>s+x.amount,0),why:kw?'subscription':'repeats'});}
+  return subs.sort((a,b)=>b.total-a.total);
+}
+function renderSubs(){
+  const el=document.getElementById('subs'),st=document.getElementById('subTotal');
+  const subs=findSubs();
+  if(!subs.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 2px">No recurring patterns detected yet.</div>';st.textContent='—';return;}
+  st.textContent='₦'+Math.round(subs.reduce((a,x)=>a+x.total,0)).toLocaleString('en-NG')+' tracked';
+  el.innerHTML=subs.map(s=>`<div class="sub"><div><span class="m">${s.m}</span><span class="why">${s.why} · ${s.n}×</span></div><span class="amt">${NGN(s.total)}</span></div>`).join('');
+}
+function importFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{document.getElementById('input').value=r.result;analyze();};r.readAsText(f);}
+
+/* ---------- actions ---------- */
+function analyze(){
+  const fx=parseFloat(document.getElementById('fx').value)||1600;
+  const txt=document.getElementById('input').value.trim();
+  if(!txt){loadSample();return;}
+  TX=parse(txt,fx);
+  document.getElementById('sampleNote').classList.add('hide');
+  render();
+}
+function clearAll(){document.getElementById('input').value='';TX=[];
+  document.getElementById('sampleNote').classList.add('hide');render();}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(TX,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='spend-sense-export.json';a.click();
+}
+const SAMPLE=`You just sent ₦35,000.00 to Christian Onuh - Foodstuff. Love, The Kuda Team.
+Hi Kalu, you just sent ₦220,000.00 to Sunrise Apartments - Rent. The Kuda Team.
+Your transfer of ₦11,000.00 is successful. Name: NNPC Filling Station Bank: Moniepoint
+Your transfer of ₦2,700.00 is successful. Name: POS Transfer- Musa Ayuba Bank: Moniepoint
+Glo data ₦3,000 recharge successful
+MTN airtime purchase of ₦2,000 successful
+You just sent ₦15,000.00 to Facebookads - Marketing. The Kuda Team.
+Your transaction of 74.14 USD to DIGITALOCEAN.COM was successful. Bybit Card.
+You just sent ₦8,500.00 to Shoprite Supermarket. The Kuda Team.
+DStv subscription of ₦12,400 successful
+You just sent ₦5,000.00 to Greenoak School - tuition balance.
+Your transfer of ₦40,000.00 is successful. Name: Bolt Rides Bank: Opay
+Blessing Abraham just sent you ₦100,000.00. The Kuda Team.
+Elijoy Enterprises just sent you ₦250,000.00. The Kuda Team.
+You just sent ₦6,300.00 to City Pharmacy - drugs.
+SMS charge of ₦52.00 applied to your account.
+You just sent ₦18,000.00 to Jumia Nigeria - order.`;
+function loadSample(){
+  document.getElementById('input').value=SAMPLE;
+  TX=parse(SAMPLE,parseFloat(document.getElementById('fx').value)||1600);
+  document.getElementById('sampleNote').classList.remove('hide');
+  render();
+}
+// Hydrate from an MCP/ingest session if ?s= is present; else show sample so the page is alive.
+(function boot(){
+  const sid=new URLSearchParams(location.search).get('s');
+  if(sid){
+    fetch('/api/session/'+encodeURIComponent(sid)).then(r=>r.ok?r.json():Promise.reject())
+      .then(d=>{ if(d&&d.tx&&d.tx.length){ TX=d.tx;
+          const n=document.getElementById('sampleNote');
+          n.innerHTML='✦ Loaded from your AI assistant via MCP — '+TX.length+' transactions.';
+          n.classList.remove('hide'); render();
+        } else loadSample(); })
+      .catch(loadSample);
+  } else loadSample();
+})();
+</script>
+</body>
+</html>
